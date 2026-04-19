@@ -175,6 +175,39 @@ The `.omc/plans/resolver-v2-plan.md` file is the consensus-approved plan for the
 
 ---
 
+## v2: Comparing models
+
+v2 adds cross-run aggregation + opinionated analysis on top of the v1
+scorecard. All v2 additions are _additive_ — v1 scorecards still run,
+still pass `TestGoldenReplay`, and still ingest cleanly into the
+aggregator.
+
+```bash
+# Ingest every scorecard + manifest + run-config under reports/ and
+# research/captures/ into a single DuckDB file:
+go build -tags duckdb -o resolver ./cmd/resolver   # CGO, first time only
+./resolver aggregate
+
+# Ad-hoc SQL:
+duckdb reports/resolver.duckdb "SELECT model, overall, correct_count FROM runs"
+
+# LLM-authored Markdown comparison report:
+pip install -e 'tools/analyze[test]'
+analyze report                    # full pipeline via llm-proxy
+analyze report --dry-run          # prompt + data to stdout, no LLM call
+```
+
+Key artefacts:
+
+- [`docs/build.md`](./docs/build.md) — dual build (pure-Go default; CGO-enabled `-tags duckdb`).
+- [`docs/manifest-schema.md`](./docs/manifest-schema.md) — manifest v2 shape + `runConfig` sidecar fields.
+- [`docs/community-benchmarks-schema.md`](./docs/community-benchmarks-schema.md) — public-benchmark YAML schema + append-only contract.
+- [`docs/prompts/run-benchmark.md`](./docs/prompts/run-benchmark.md) — AI-orchestration prompt for running a capture end-to-end.
+- [`docs/prompts/compare-models.md`](./docs/prompts/compare-models.md) — Jinja prompt the Python analyzer uses to author reports.
+- [`docs/prompts/scrape-community-benchmarks.md`](./docs/prompts/scrape-community-benchmarks.md) — AI-orchestration prompt for appending verified leaderboard rows.
+- [`tools/analyze/`](./tools/analyze/) — Python package, `analyze report` CLI, reproducibility notebook.
+- [`research/captures/`](./research/captures/) — 13 real-model reference runs seeding the aggregator on day one.
+
 ## Known v1 limitations
 
 - Only the `openai-chat` adapter ships. Anthropic / openclaw / hf-serverless are explicit v2.
