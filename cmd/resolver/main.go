@@ -40,21 +40,22 @@ const (
 )
 
 type flags struct {
-	endpoint    string
-	model       string
-	tier        string
-	scenario    string
-	sweep       string
-	axis        string
-	nSeeds      int
-	gate        string
-	parallel    bool
-	dryRun      bool
-	apiKey      string
-	replay      string
-	emitReplay  string
-	dataDir     string
-	out         string
+	endpoint   string
+	model      string
+	tier       string
+	scenario   string
+	sweep      string
+	axis       string
+	nSeeds     int
+	gate       string
+	parallel   bool
+	dryRun     bool
+	apiKey     string
+	replay     string
+	emitReplay string
+	runConfig  string
+	dataDir    string
+	out        string
 }
 
 func main() {
@@ -114,6 +115,26 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	ts := time.Now().UTC()
 	tok := tokenizer.Default()
 	mb := manifest.NewBuilder(f.model, f.endpoint, ad.Name(), string(tok.Mode())).WithTier(f.tier)
+
+	// Optional --run-config sidecar: capture proxy + vLLM recipe metadata into
+	// the manifest alongside the scorecard. Unknown values stay unset.
+	if f.runConfig != "" {
+		rc, err := manifest.LoadSidecar(f.runConfig)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 2
+		}
+		mb = mb.WithRunConfig(rc)
+	}
+
+	// /v1/models probe (skip under --replay; the scorecard's `meta.model` is
+	// the *virtual* model name, not the real one, so carrying it forward
+	// would mislead downstream diffs. In replay mode users rely on the
+	// --run-config sidecar's real_model field instead.)
+	if capturedMeta == nil {
+		resolved := ad.ResolveRealModel(ctx, f.model)
+		mb = mb.WithResolvedRealModel(resolved)
+	}
 
 	var perQueries []runner.PerQuery
 	if f.tier == "2" || isMultiTurn(scenarios) {
@@ -297,6 +318,7 @@ func parseFlags() flags {
 	flag.StringVar(&f.apiKey, "api-key", os.Getenv("RESOLVER_API_KEY"), "bearer token (v1 stub for local llm-proxy)")
 	flag.StringVar(&f.replay, "replay", "", "path to canned responses JSON for offline golden tests")
 	flag.StringVar(&f.emitReplay, "emit-replay", "", "capture this live run to a replay JSON (alongside scorecard)")
+	flag.StringVar(&f.runConfig, "run-config", "", "path to a run-config YAML sidecar (proxy route + vLLM recipe metadata captured into the manifest)")
 	flag.StringVar(&f.dataDir, "data-dir", "", "override embedded data with an external directory")
 	flag.StringVar(&f.out, "out", "", "output directory (default reports/results or reports/sweeps)")
 	flag.Parse()

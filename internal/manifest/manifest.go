@@ -13,14 +13,89 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // SchemaVersion tracks breaking changes to the manifest shape. Bump when a
-// downstream consumer would have to care.
-const SchemaVersion = 1
+// downstream consumer would have to care. See docs/manifest-schema.md.
+//
+//   v1: initial release (runId, model, adapter, tokenizerMode, seeds,
+//       scenarioHashes, timestamps, goVersion, commitSha, hostName).
+//   v2: adds RunConfig sidecar + ResolvedRealModel wired via the
+//       ResolveRealModel probe. v1 manifests remain readable by every
+//       v2 tool (the aggregator ingests RunConfig as nullable).
+const SchemaVersion = 2
+
+// RunConfig captures the stack configuration behind a given run — both the
+// llm-proxy route (clamps, sampling defaults) and the underlying engine
+// recipe (vLLM flags, quantization, MTP, parsers). Optional sidecar; every
+// field is a pointer so "unset" is distinguishable from "zero".
+//
+// Any non-local backing (HuggingFace serverless, Anthropic, etc.) must
+// record engine-level fields as "unknown" rather than hallucinating —
+// per principle #4 of the v2 plan.
+type RunConfig struct {
+	// Proxy / backing model
+	RealModel   string `yaml:"real_model,omitempty" json:"real_model,omitempty"`
+	BackendPort int    `yaml:"backend_port,omitempty" json:"backend_port,omitempty"`
+	Backend     string `yaml:"backend,omitempty" json:"backend,omitempty"`
+
+	// Proxy route defaults (harness forces temperature=0 per spec §2; these
+	// are recorded for what *would* have applied)
+	DefaultTemperature      *float64 `yaml:"default_temperature,omitempty" json:"default_temperature,omitempty"`
+	DefaultTopP             *float64 `yaml:"default_top_p,omitempty" json:"default_top_p,omitempty"`
+	DefaultTopK             *int     `yaml:"default_top_k,omitempty" json:"default_top_k,omitempty"`
+	DefaultPresencePenalty  *float64 `yaml:"default_presence_penalty,omitempty" json:"default_presence_penalty,omitempty"`
+	DefaultFrequencyPenalty *float64 `yaml:"default_frequency_penalty,omitempty" json:"default_frequency_penalty,omitempty"`
+	DefaultMaxTokens        *int     `yaml:"default_max_tokens,omitempty" json:"default_max_tokens,omitempty"`
+	DefaultEnableThinking   *bool    `yaml:"default_enable_thinking,omitempty" json:"default_enable_thinking,omitempty"`
+	ClampEnableThinking     *bool    `yaml:"clamp_enable_thinking,omitempty" json:"clamp_enable_thinking,omitempty"`
+
+	// Engine (vLLM) layer
+	Container             string `yaml:"container,omitempty" json:"container,omitempty"`
+	TensorParallel        int    `yaml:"tensor_parallel,omitempty" json:"tensor_parallel,omitempty"`
+	GPUMemoryUtilization  *float64 `yaml:"gpu_memory_utilization,omitempty" json:"gpu_memory_utilization,omitempty"`
+	ContextSize           int    `yaml:"context_size,omitempty" json:"context_size,omitempty"`
+	MaxNumBatchedTokens   int    `yaml:"max_num_batched_tokens,omitempty" json:"max_num_batched_tokens,omitempty"`
+	KVCacheDtype          string `yaml:"kv_cache_dtype,omitempty" json:"kv_cache_dtype,omitempty"`
+	AttentionBackend      string `yaml:"attention_backend,omitempty" json:"attention_backend,omitempty"`
+	PrefixCaching         *bool  `yaml:"prefix_caching,omitempty" json:"prefix_caching,omitempty"`
+	EnableAutoToolChoice  *bool  `yaml:"enable_auto_tool_choice,omitempty" json:"enable_auto_tool_choice,omitempty"`
+	ToolParser            string `yaml:"tool_parser,omitempty" json:"tool_parser,omitempty"`
+	ReasoningParser       string `yaml:"reasoning_parser,omitempty" json:"reasoning_parser,omitempty"`
+	ChatTemplate          string `yaml:"chat_template,omitempty" json:"chat_template,omitempty"`
+	MTP                   *bool  `yaml:"mtp,omitempty" json:"mtp,omitempty"`
+	MTPMethod             string `yaml:"mtp_method,omitempty" json:"mtp_method,omitempty"`
+	MTPNumSpeculativeTokens int  `yaml:"mtp_num_speculative_tokens,omitempty" json:"mtp_num_speculative_tokens,omitempty"`
+	LoadFormat            string `yaml:"load_format,omitempty" json:"load_format,omitempty"`
+	Quantization          string `yaml:"quantization,omitempty" json:"quantization,omitempty"`
+
+	// Capture metadata
+	VirtualModel    string `yaml:"virtual_model,omitempty" json:"virtual_model,omitempty"`
+	CapturedAt      string `yaml:"captured_at,omitempty" json:"captured_at,omitempty"`
+	ProxyRecipePath string `yaml:"proxy_recipe_path,omitempty" json:"proxy_recipe_path,omitempty"`
+	VLLMRecipePath  string `yaml:"vllm_recipe_path,omitempty" json:"vllm_recipe_path,omitempty"`
+	RepeatGroup     string `yaml:"repeat_group,omitempty" json:"repeat_group,omitempty"`
+
+	// Free-form notes
+	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
+}
+
+// LoadSidecar parses a --run-config YAML file.
+func LoadSidecar(path string) (*RunConfig, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("run-config %s: %w", path, err)
+	}
+	var rc RunConfig
+	if err := yaml.Unmarshal(raw, &rc); err != nil {
+		return nil, fmt.Errorf("run-config %s yaml: %w", path, err)
+	}
+	return &rc, nil
+}
 
 // Manifest is the per-run reproducibility record.
 type Manifest struct {
@@ -41,6 +116,9 @@ type Manifest struct {
 	GoVersion         string            `json:"goVersion"`
 	CommitSHA         string            `json:"commitSha"`
 	HostName          string            `json:"hostName,omitempty"`
+
+	// v2: optional sidecar describing the stack behind the run.
+	RunConfig *RunConfig `json:"runConfig,omitempty"`
 }
 
 // Builder accumulates values during a run, then emits a Manifest.
@@ -75,9 +153,17 @@ func (b *Builder) WithSweep(name string, seeds []int, parallel bool) *Builder {
 	return b
 }
 
-// WithResolvedRealModel records llm-proxy's backing model when discoverable.
+// WithResolvedRealModel records llm-proxy's backing model when discoverable
+// (via the adapter's ResolveRealModel probe). Falls back to "unknown" at the
+// caller when the probe fails.
 func (b *Builder) WithResolvedRealModel(name string) *Builder {
 	b.m.ResolvedRealModel = name
+	return b
+}
+
+// WithRunConfig attaches a parsed sidecar describing the run's stack state.
+func (b *Builder) WithRunConfig(rc *RunConfig) *Builder {
+	b.m.RunConfig = rc
 	return b
 }
 
@@ -94,11 +180,6 @@ func (b *Builder) Write(dir string) (string, error) {
 	if hn, err := os.Hostname(); err == nil {
 		b.m.HostName = hn
 	}
-	// Deterministic key ordering for scenarioHashes is already handled by
-	// encoding/json on maps (sorts keys); explicit sort guarantees the
-	// visible slice in tests.
-	sort.Strings(keysOf(b.m.ScenarioHashes))
-
 	outDir := filepath.Join(dir, "manifests")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return "", err
@@ -118,14 +199,6 @@ func (b *Builder) Write(dir string) (string, error) {
 func (b *Builder) Current() Manifest {
 	m := b.m
 	return m
-}
-
-func keysOf[K comparable, V any](m map[K]V) []K {
-	out := make([]K, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }
 
 // newRunID builds a ULID-ish identifier: {ts}-{hex8}. Good enough without a

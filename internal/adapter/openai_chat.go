@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -253,4 +255,101 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// ResolveRealModel probes the endpoint's {origin}/v1/models list and returns
+// the backing model id for `forModel` (the virtual model the benchmark is
+// targeting). Used to populate manifest.resolvedRealModel so cross-run
+// comparisons know what was actually measured (the virtual model name is a
+// proxy-side routing artefact).
+//
+// The probe looks for an entry whose `id` matches `forModel`, then prefers
+// its `root` field (the backing model) over its `id`. If no entry matches
+// — e.g. because the endpoint's /v1/models doesn't know about the virtual,
+// or returns an atypical shape — falls back to `data[0]` so we still get
+// something, or to "unknown".
+//
+// Returns the literal string "unknown" on any failure (transport, non-2xx,
+// malformed body, empty data array) and logs a single-line warning to
+// stderr. Never a fatal error for the caller — per v2 plan principle #4.
+//
+// Context deadline: 5s regardless of the caller's timeout, so a slow
+// probe can't hold up a benchmark run.
+func (a *OpenAIChat) ResolveRealModel(ctx context.Context, forModel string) string {
+	origin, ok := endpointOrigin(a.Endpoint)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "warn: cannot derive origin from endpoint %q; resolvedRealModel=unknown\n", a.Endpoint)
+		return "unknown"
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, origin+"/v1/models", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: /v1/models probe request: %v; resolvedRealModel=unknown\n", err)
+		return "unknown"
+	}
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: /v1/models probe: %v; resolvedRealModel=unknown\n", err)
+		return "unknown"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		fmt.Fprintf(os.Stderr, "warn: /v1/models probe http %d; resolvedRealModel=unknown\n", resp.StatusCode)
+		return "unknown"
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: /v1/models probe read: %v; resolvedRealModel=unknown\n", err)
+		return "unknown"
+	}
+	var parsed struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Root string `json:"root"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil || len(parsed.Data) == 0 {
+		fmt.Fprintf(os.Stderr, "warn: /v1/models probe parse (body=%s); resolvedRealModel=unknown\n", truncate(string(body), 120))
+		return "unknown"
+	}
+	pick := func(e struct {
+		ID   string `json:"id"`
+		Root string `json:"root"`
+	}) string {
+		if e.Root != "" {
+			return e.Root
+		}
+		return e.ID
+	}
+	// Prefer an entry whose id matches the model we asked about, but only
+	// if forModel was actually supplied (empty forModel → treat as "no
+	// filter", use data[0]).
+	if forModel != "" {
+		for _, e := range parsed.Data {
+			if e.ID == forModel {
+				if got := pick(e); got != "" {
+					return got
+				}
+			}
+		}
+		fmt.Fprintf(os.Stderr, "warn: /v1/models did not list %q; falling back to data[0]\n", forModel)
+	}
+	if got := pick(parsed.Data[0]); got != "" {
+		return got
+	}
+	return "unknown"
+}
+
+// endpointOrigin strips the /v1/chat/completions (or similar path) from
+// the full endpoint URL so /v1/models can be appended. Falls back to the
+// full endpoint if parsing fails, which is always safe — the probe will
+// then 404 and we return "unknown".
+func endpointOrigin(endpoint string) (string, bool) {
+	// Simplest reliable split: find the last "/v1/" and strip from there.
+	idx := strings.Index(endpoint, "/v1/")
+	if idx < 0 {
+		return endpoint, true
+	}
+	return endpoint[:idx], true
 }
