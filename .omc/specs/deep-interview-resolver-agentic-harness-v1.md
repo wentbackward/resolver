@@ -30,7 +30,7 @@ Build a framework-agnostic, single-binary Go test harness that (a) reimplements 
 - **HITL flows:** Deferred to v2. v1 only exercises single-turn + scripted multi-turn with mocked data-producing tools.
 - **Judge LLM:** Deferred to v2. All v1 verdicts are pattern-based (regex, tool-call presence/absence/order, argument matching).
 - **Reference Node implementation:** Not accessible in this repo. Build from `RESOLVER-VALIDATION-SPEC.md` alone; drop PLAN.md Phase A.3 timing-parity verification. All other parity (scorecard JSON §7, exit codes §8, regex rules §5) is preserved.
-- **Default endpoint:** `http://spark-01:4000/v1/chat/completions` (the llm-proxy).
+- **Default endpoint:** `http://localhost:4000/v1/chat/completions` (the llm-proxy).
 - **Default model identifier:** `gresh-general` (virtual model routed by llm-proxy to Qwen/Qwen3.6-35B-A3B-FP8 on port 3040). Other virtual models (`gresh-huge`, etc.) work via `--model`.
 - **Fixture corpus:** Hand-selected documents (not hand-written) form the v1 fixture pool for context-size sweep B. LLM-generated synthetic documents are allowed for scaling beyond the hand-curated sizes in v2 (seeded generator, deterministic).
 - **Execution model:** Serial query execution (spec §9), `temperature=0`, 180s HTTP timeout. Sweeps may run parallel across seeds when `--parallel` is explicit; otherwise serial.

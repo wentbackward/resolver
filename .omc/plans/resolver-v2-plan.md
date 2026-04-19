@@ -127,7 +127,7 @@ Frozen contracts: scorecard `meta` key set, exit codes, v1 CLI flags, openai-cha
 - [ ] `[Py][v2-new]` `tools/analyze/pyproject.toml` declares: `duckdb>=1.0,<2.0`, `polars>=0.20,<2.0` (or `pandas>=2.0,<3.0`), `pyyaml>=6.0`, `openai>=1.0,<2.0`, `jinja2>=3.0`, `typer>=0.9` (CLI), `jupyter>=1.0`. Upper bounds pinned.
 - [ ] `[Py][v2-new]` Package layout: `tools/analyze/src/analyze/{__init__,cli,db,report,bench}.py` + `tools/analyze/tests/`.
 - [ ] `[Py][v2-new]` `analyze report` command:
-  - Flags: `--db reports/resolver.duckdb`, `--out tools/analyze/out/analysis-{ts}.md` (default), `--reporter-model gresh-general` (default), `--endpoint` (default = `$RESOLVER_REPORTER_ENDPOINT` or `http://spark-01:4000/v1/chat/completions`), `--dry-run`.
+  - Flags: `--db reports/resolver.duckdb`, `--out tools/analyze/out/analysis-{ts}.md` (default), `--reporter-model gresh-general` (default), `--endpoint` (default = `$RESOLVER_REPORTER_ENDPOINT` or `http://localhost:4000/v1/chat/completions`), `--dry-run`.
   - Opens DuckDB; runs a fixed query set (ranking, per-tier summary, variance, community-benchmark join).
   - Renders the query results into the prompt template at `docs/prompts/compare-models.md` via Jinja.
   - In non-dry-run: POSTs to the endpoint via `openai` SDK (OpenAI-compatible); 60s timeout; on failure writes `(analysis failed: <reason>)` + raw data tables so the run is never wasted.

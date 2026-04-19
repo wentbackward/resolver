@@ -51,7 +51,7 @@ Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` th
 2. Extends the runner to multi-turn scenarios with scripted tool responses, mocked data-producing tools (`read_document`, `web_search`, `fetch_api`), and per-turn metrics.
 3. Adds two meta-sweeps — Sweep A (tool count: 5/20/50/100/300) and Sweep B (context size: 5K/40K/80K/120K/200K) — that emit CSV curves plus operator-configurable PASS/FAIL gates via `--gate policy.yaml`.
 4. Ships `openai-chat` adapter only (via llm-proxy). Anthropic, openclaw, hf-serverless are explicit v2.
-5. Defaults: `--endpoint http://spark-01:4000/v1/chat/completions` and `--model gresh-general` (llm-proxy virtual → Qwen/Qwen3.6-35B-A3B-FP8). Env vars `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` override defaults with lower precedence than flags.
+5. Defaults: `--endpoint http://localhost:4000/v1/chat/completions` and `--model gresh-general` (llm-proxy virtual → Qwen/Qwen3.6-35B-A3B-FP8). Env vars `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` override defaults with lower precedence than flags.
 6. Serial execution per-query (spec §9), `temperature=0`, 180s per-request timeout. Sweep seeds may run in parallel only behind an explicit `--parallel` flag.
 7. Every run writes a sibling `manifest.json` (model, adapter config, scenario hashes, seeds, timestamps). Scorecard `meta` stays byte-identical to spec §7 keys; Go-specific metadata lives in the manifest only.
 8. Module path: `github.com/wentbackward/resolver` (matches the GitHub repo at https://github.com/wentbackward/resolver).
@@ -109,7 +109,7 @@ Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` th
 
 ### Non-goal clarifications (limit scope creep)
 - [ ] ⊕ **Principle #5 caveat documented in README**: scenario YAML currently declares OpenAI `tools` block shape directly — this is a known v1 limitation. Genuine adapter-agnostic abstraction (e.g. Anthropic tool format) is explicit v2 work.
-- [ ] ⊕ **HTTP auth noted**: `--api-key` is stubbed and not required against the local `spark-01:4000` llm-proxy. Documented in README.
+- [ ] ⊕ **HTTP auth noted**: `--api-key` is stubbed and not required against the local `localhost:4000` llm-proxy. Documented in README.
 
 ---
 
@@ -215,7 +215,7 @@ Runnable in order. Each gates the next phase.
 1. `go vet ./... && go test ./... -count=1` — unit tests including fallback parser, partial rules, regex verdicts, gate evaluator, golden scorecard + manifest shape, needle verdict.
 2. `resolver --scenario scenarios/tier1/T1-exec.yaml --dry-run` — lists 5 queries, expected tool, validation rule without hitting network.
 3. Replay golden: `resolver --replay golden/canned-responses.json --tier 1 -o /tmp/scorecard.json && diff /tmp/scorecard.json golden/scorecard_example.json` is empty (byte-exact).
-4. Tier 1 smoke (gated on `RESOLVER_SMOKE=1`): `RESOLVER_SMOKE=1 resolver --tier 1 --endpoint http://spark-01:4000/v1/chat/completions --model gresh-general` finishes, emits scorecard under `reports/results/{modelSlug}_{iso}.json`, exits 0 with all five gated thresholds PASS.
+4. Tier 1 smoke (gated on `RESOLVER_SMOKE=1`): `RESOLVER_SMOKE=1 resolver --tier 1 --endpoint http://localhost:4000/v1/chat/completions --model gresh-general` finishes, emits scorecard under `reports/results/{modelSlug}_{iso}.json`, exits 0 with all five gated thresholds PASS.
 5. Multi-turn smoke: `resolver --scenario scenarios/tier2-multiturn/progressive-context.yaml --model gresh-general` completes three turns, per-turn metrics captured, verdict recorded.
 6. Sweep A smoke: `resolver --sweep tool-count --axis "5,20" --model gresh-general -n 2 --gate contrib/gates/tool-count.yaml` emits `reports/sweeps/*.csv` and gate verdict.
 7. Sweep B smoke: `resolver --sweep context-size --axis "5000,40000" --model gresh-general -n 2 --gate contrib/gates/context-size.yaml` emits a CSV with `needle_found` per row.
