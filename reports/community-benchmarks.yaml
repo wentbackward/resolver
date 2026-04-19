@@ -1,0 +1,55 @@
+# Community benchmark reference data joined into the v2 aggregator.
+#
+# APPEND-ONLY FILE: historical rows must not change (a score reported on a
+# specific date is immutable — a new eval produces a new row with a newer
+# `as_of`, it does not overwrite the old one). The aggregator's
+# `community_benchmarks` table is truncate-and-reloaded from this file
+# each run — the table is a derived mirror, this file is canonical.
+#
+# Schema + contribution workflow: docs/community-benchmarks-schema.md
+# AI-driven refresh protocol:       docs/prompts/scrape-community-benchmarks.md
+#
+# ==================================================================
+# SEED DATA NOTICE
+# ==================================================================
+# The 21 rows below seed the aggregator + analyzer with enough data to
+# demonstrate the join shape. Values are best-effort known numbers as of
+# April 2026; every row's `notes` field carries a "seed — verify via
+# <source_url>" marker. Before citing these externally:
+#
+#   1. Follow the URL.
+#   2. Confirm the number still matches (or append a newer row with
+#      today's `as_of`).
+#   3. Remove the "seed — verify" note so downstream tooling knows the
+#      row is operator-confirmed.
+#
+# ==================================================================
+
+entries:
+  # ─── Qwen/Qwen3.6-35B-A3B-FP8 ────────────────────────────────────
+  # (The FP8-quantized flavour our llm-proxy routes gresh-general to.)
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: bfcl,          metric: overall,     value: 0.76, source_url: "https://gorilla.cs.berkeley.edu/leaderboard.html",              as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: tau-bench,     metric: retail,      value: 0.48, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: tau-bench,     metric: airline,     value: 0.38, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: ruler,         metric: 32k,         value: 0.88, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: ruler,         metric: 128k,        value: 0.71, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: mmlu,          metric: 5shot,       value: 0.82, source_url: "https://huggingface.co/Qwen",                                   as_of: 2026-04-01, notes: "seed — verify via source_url" }
+  - { model: "Qwen/Qwen3.6-35B-A3B-FP8", benchmark: gpqa,          metric: diamond,     value: 0.55, source_url: "https://github.com/idavidrein/gpqa",                            as_of: 2026-04-01, notes: "seed — verify via source_url" }
+
+  # ─── meta-llama/Llama-3.1-70B-Instruct ───────────────────────────
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: bfcl,          metric: overall,     value: 0.75, source_url: "https://gorilla.cs.berkeley.edu/leaderboard.html",              as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: tau-bench,     metric: retail,      value: 0.42, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: tau-bench,     metric: airline,     value: 0.35, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: ruler,         metric: 32k,         value: 0.85, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: ruler,         metric: 128k,        value: 0.67, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: mmlu,          metric: 5shot,       value: 0.83, source_url: "https://ai.meta.com/blog/meta-llama-3-1/",                      as_of: 2026-02-15, notes: "seed — verify via source_url" }
+  - { model: "meta-llama/Llama-3.1-70B-Instruct", benchmark: gpqa,          metric: diamond,     value: 0.42, source_url: "https://github.com/idavidrein/gpqa",                            as_of: 2026-02-15, notes: "seed — verify via source_url" }
+
+  # ─── anthropic/claude-sonnet-4.6 ─────────────────────────────────
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: bfcl,          metric: overall,     value: 0.87, source_url: "https://gorilla.cs.berkeley.edu/leaderboard.html",              as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: tau-bench,     metric: retail,      value: 0.69, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: tau-bench,     metric: airline,     value: 0.55, source_url: "https://github.com/sierra-research/tau-bench",                  as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: ruler,         metric: 32k,         value: 0.95, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: ruler,         metric: 128k,        value: 0.85, source_url: "https://github.com/NVIDIA/RULER",                               as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: mmlu,          metric: 5shot,       value: 0.89, source_url: "https://www.anthropic.com/news/claude-4-family",                as_of: 2026-03-10, notes: "seed — verify via source_url" }
+  - { model: "anthropic/claude-sonnet-4.6", benchmark: gpqa,          metric: diamond,     value: 0.67, source_url: "https://github.com/idavidrein/gpqa",                            as_of: 2026-03-10, notes: "seed — verify via source_url" }
