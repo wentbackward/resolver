@@ -115,3 +115,29 @@ func TestLoadCommunityEmptyFile(t *testing.T) {
 		t.Errorf("expected 0 entries, got %d", len(got))
 	}
 }
+
+func TestLoadCommunityRejectsOversizedYAML(t *testing.T) {
+	// Write a file that exceeds the 1 MB cap.
+	dir := t.TempDir()
+	p := filepath.Join(dir, "community-benchmarks.yaml")
+	// Build a file slightly over 1 MB by writing a large comment header followed
+	// by a valid entries block. The content itself is irrelevant — size is all
+	// that matters for this guard.
+	const oneMB = 1 << 20
+	buf := make([]byte, oneMB+1)
+	// Fill with '#' so the YAML parser never even sees it (readCapped rejects
+	// before Unmarshal).
+	for i := range buf {
+		buf[i] = '#'
+	}
+	if err := os.WriteFile(p, buf, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := aggregate.LoadCommunity(p)
+	if err == nil {
+		t.Fatal("expected error for oversized YAML, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("expected 'exceeds' in error message, got: %v", err)
+	}
+}

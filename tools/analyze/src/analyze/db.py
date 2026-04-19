@@ -9,11 +9,57 @@ template renders from the dataclasses below.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import duckdb
+
+
+# ---------------------------------------------------------------------------
+# Model-name normalisation
+# ---------------------------------------------------------------------------
+
+_QUANT_SUFFIXES = ("-fp8", "-fp16", "-bf16", "-int8", "-int4", "-gptq", "-awq")
+_SEP_RUN = re.compile(r"[-_.]{2,}|_")
+
+
+def _normalize_model(name: str) -> str:
+    """Canonical key for a model name — mirrors Go's aggregate.NormalizeModel.
+
+    Rules (applied in order):
+    1. Lowercase.
+    2. Strip org prefix: keep only the segment after the last '/'.
+    3. Strip quantization suffixes (-fp8, -fp16, -bf16, -int8, -int4,
+       -gptq, -awq) in a loop until none remain.
+    4. Collapse runs of 2+ separator chars ([-_.]) or standalone underscores
+       to a single '-'. Single dots and dashes are preserved so version
+       numbers like "3.6" survive.
+    5. Trim leading/trailing '-'.
+    """
+    s = name.lower()
+
+    # Strip org prefix.
+    if "/" in s:
+        s = s.rsplit("/", 1)[-1]
+
+    # Strip quantization suffixes repeatedly until stable.
+    changed = True
+    while changed:
+        changed = False
+        for sfx in _QUANT_SUFFIXES:
+            if s.endswith(sfx):
+                s = s[: -len(sfx)]
+                changed = True
+
+    # Collapse separator runs.
+    s = _SEP_RUN.sub("-", s)
+
+    # Trim edge dashes.
+    s = s.strip("-")
+
+    return s
 
 
 @dataclass
@@ -162,15 +208,18 @@ class Store:
     def community_for(self, real_models: list[str]) -> list[CommunityRow]:
         if not real_models:
             return []
-        placeholders = ",".join(["?"] * len(real_models))
+        # Normalise the caller-supplied model names so they match the
+        # model_key column written by the Go aggregator (NormalizeModel).
+        normalised = [_normalize_model(m) for m in real_models]
+        placeholders = ",".join(["?"] * len(normalised))
         rows = self.conn.execute(
             f"""
             SELECT model, benchmark, metric, value, source_url, CAST(as_of AS VARCHAR)
             FROM community_benchmarks
-            WHERE model IN ({placeholders})
+            WHERE model_key IN ({placeholders})
             ORDER BY model, benchmark, metric
             """,
-            real_models,
+            normalised,
         ).fetchall()
         return [CommunityRow(*r) for r in rows]
 

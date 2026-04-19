@@ -11,7 +11,7 @@ package aggregate
 // build configurations. The concrete Run implementation differs by tag.
 type Options struct {
 	// ReportsDir is a comma-separated list of report roots to walk.
-	// Empty → default ["reports", "research/captures"].
+	// Empty → defaultReportRoots (see ingest.go).
 	ReportsDir string
 
 	// DBPath is the DuckDB file to upsert into. Empty → reports/resolver.duckdb.

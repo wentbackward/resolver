@@ -2,7 +2,6 @@ package scenario
 
 import (
 	"fmt"
-	"os"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,7 +22,7 @@ type thresholdsFile struct {
 // `resolver --thresholds PATH`. The default set (labels matching spec §7)
 // is embedded in the binary at `cmd/resolver/data/tier1/gate-thresholds.yaml`.
 func LoadGateThresholds(path string) ([]GatedCheck, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := readCapped(path, maxYAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("thresholds %s: %w", path, err)
 	}
@@ -64,12 +63,19 @@ func parseGateThresholds(raw []byte) ([]GatedCheck, error) {
 // level state because GatedTiers() has always been a package-level
 // getter; an override path is cheaper than threading the list through
 // every caller. Tests that need isolation should snapshot + restore.
+//
+// NOT safe for use under t.Parallel(): this mutates package-level state.
+// Tests must snapshot the current value and call ResetGatedTiersToDefaults
+// (or restore the snapshot) in a t.Cleanup handler.
 func SetGatedTiers(checks []GatedCheck) {
 	gatedTiersOverride = checks
 }
 
 // ResetGatedTiersToDefaults reverts any SetGatedTiers override back to
 // the embedded defaults (the literal slice defined in GatedTiers).
+//
+// NOT safe for use under t.Parallel() — same package-state caveat as
+// SetGatedTiers.
 func ResetGatedTiersToDefaults() {
 	gatedTiersOverride = nil
 }

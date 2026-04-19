@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -276,9 +278,9 @@ func truncate(s string, n int) string {
 // Context deadline: 5s regardless of the caller's timeout, so a slow
 // probe can't hold up a benchmark run.
 func (a *OpenAIChat) ResolveRealModel(ctx context.Context, forModel string) string {
-	origin, ok := endpointOrigin(a.Endpoint)
-	if !ok {
-		fmt.Fprintf(os.Stderr, "warn: cannot derive origin from endpoint %q; resolvedRealModel=unknown\n", a.Endpoint)
+	origin, err := endpointOrigin(a.Endpoint)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: cannot derive origin from endpoint %q: %v; resolvedRealModel=unknown\n", a.Endpoint, err)
 		return "unknown"
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -341,15 +343,87 @@ func (a *OpenAIChat) ResolveRealModel(ctx context.Context, forModel string) stri
 	return "unknown"
 }
 
-// endpointOrigin strips the /v1/chat/completions (or similar path) from
-// the full endpoint URL so /v1/models can be appended. Falls back to the
-// full endpoint if parsing fails, which is always safe — the probe will
-// then 404 and we return "unknown".
-func endpointOrigin(endpoint string) (string, bool) {
-	// Simplest reliable split: find the last "/v1/" and strip from there.
-	idx := strings.Index(endpoint, "/v1/")
-	if idx < 0 {
-		return endpoint, true
+// endpointOrigin parses the endpoint, guards against SSRF (private
+// and link-local ranges rejected; loopback exempt for the documented
+// localhost dev default), and returns the scheme://host[:port] origin
+// so callers can append /v1/models. DNS failures are treated as not
+// an SSRF risk — the probe then 404s and the caller degrades to
+// "unknown".
+func endpointOrigin(endpoint string) (string, error) {
+	if endpoint == "" {
+		return "", fmt.Errorf("empty endpoint")
 	}
-	return endpoint[:idx], true
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("parse endpoint: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q (want http or https)", u.Scheme)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("empty host in endpoint %q", endpoint)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "", fmt.Errorf("empty hostname in endpoint %q", endpoint)
+	}
+	if err := checkHostAllowed(host); err != nil {
+		return "", err
+	}
+	return scheme + "://" + u.Host, nil
+}
+
+func checkHostAllowed(host string) error {
+	lower := strings.ToLower(host)
+	if lower == "localhost" || lower == "127.0.0.1" || lower == "::1" {
+		return nil
+	}
+	var ips []net.IP
+	if ip := net.ParseIP(host); ip != nil {
+		ips = []net.IP{ip}
+	} else {
+		resolved, err := net.LookupIP(host)
+		if err != nil {
+			return nil
+		}
+		ips = resolved
+	}
+	for _, ip := range ips {
+		if isBlockedIP(ip) {
+			return fmt.Errorf("host %q resolves to blocked address %s", host, ip)
+		}
+	}
+	return nil
+}
+
+// isBlockedIP reports whether ip is in a private or link-local range
+// that an operator-supplied endpoint should not reach. Loopback is
+// intentionally NOT blocked — the dev default is http://localhost:4000.
+func isBlockedIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return false
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		if v4[0] == 10 {
+			return true
+		}
+		if v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31 {
+			return true
+		}
+		if v4[0] == 192 && v4[1] == 168 {
+			return true
+		}
+	}
+	// IPv6 unique local (fc00::/7).
+	if ip.To4() == nil && len(ip) == net.IPv6len && (ip[0]&0xfe) == 0xfc {
+		return true
+	}
+	return false
 }

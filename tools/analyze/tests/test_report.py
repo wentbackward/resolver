@@ -13,7 +13,7 @@ from analyze.db import Store, RunSummary
 
 def test_gather_context_populates_counts(seeded_db):
     with Store(seeded_db) as s:
-        ctx = gather_context(s)
+        ctx, runs = gather_context(s)
     assert ctx["n_runs"] == 3
     assert ctx["n_real_models"] == 2
     # variance should have 2 rows (group-a × 2 scenarios)
@@ -24,7 +24,7 @@ def test_gather_context_populates_counts(seeded_db):
 
 def test_summarize_data_has_section_headers(seeded_db):
     with Store(seeded_db) as s:
-        ctx = gather_context(s)
+        ctx, _ = gather_context(s)
     md = summarize_data(ctx)
     for section in ["Source data summary", "Runs", "Community benchmarks", "Per-scenario stddev"]:
         assert section in md, f"missing section: {section}"

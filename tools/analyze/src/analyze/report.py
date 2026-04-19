@@ -48,17 +48,18 @@ def render_prompt(template_path: Path, ctx: dict) -> str:
     return env.get_template(template_path.name).render(**ctx)
 
 
-def gather_context(store: Store) -> dict:
-    """Run the fixed query set against the store and return a prompt
-    context dictionary. Dataclasses are converted to dicts so the Jinja
-    template can use attribute-style access either way."""
+def gather_context(store: Store) -> tuple[dict, list]:
+    """Run the fixed query set against the store and return a (context, runs)
+    tuple. The runs list is returned separately so callers can pass it to
+    self_eval_guard without a second DB round-trip. Dataclasses are converted
+    to dicts so the Jinja template can use attribute-style access either way."""
     runs = store.run_summaries()
     tiers = store.tier_pcts()
     variance = store.variance()
     real_models = sorted({r.resolved_real_model or r.model for r in runs})
     community = store.community_for(real_models)
 
-    return {
+    ctx = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "runs": [asdict(r) for r in runs],
         "tier_pcts": [asdict(t) for t in tiers],
@@ -68,6 +69,7 @@ def gather_context(store: Store) -> dict:
         "n_real_models": len({r.resolved_real_model or r.model for r in runs}),
         "n_variance_rows": len(variance),
     }
+    return ctx, runs
 
 
 def summarize_data(ctx: dict) -> str:
@@ -170,8 +172,8 @@ def build_report(
             f"`resolver aggregate` (requires -tags duckdb build)."
         )
     with Store(db_path) as store:
-        ctx = gather_context(store)
-        self_eval_guard(store.run_summaries(), reporter_model)
+        ctx, runs = gather_context(store)
+        self_eval_guard(runs, reporter_model)
 
     prompt = render_prompt(template, ctx)
     data_summary = summarize_data(ctx)

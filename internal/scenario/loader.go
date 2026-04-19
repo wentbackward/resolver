@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,6 +11,25 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+const maxYAMLBytes = 1 << 20 // 1 MB
+
+func readCapped(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	lr := &io.LimitedReader{R: f, N: limit + 1}
+	buf, err := io.ReadAll(lr)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(buf)) > limit {
+		return nil, fmt.Errorf("%s: yaml exceeds %d bytes", path, limit)
+	}
+	return buf, nil
+}
 
 // File is a top-level YAML file: one or more scenarios in sequence plus an
 // optional `shared` block whose fields default into every scenario below.
@@ -27,7 +47,7 @@ type sharedDefaults struct {
 // LoadFile reads a YAML scenario file and returns the parsed scenarios with
 // shared defaults folded in and Validate() called on each.
 func LoadFile(path string) ([]Scenario, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := readCapped(path, maxYAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -106,7 +126,7 @@ func tierOrder(t Tier) int {
 // LoadSharedTools loads a YAML file whose `tools:` key lists the 5 resolver
 // tool definitions per spec §4.
 func LoadSharedTools(path string) ([]ToolDef, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := readCapped(path, maxYAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

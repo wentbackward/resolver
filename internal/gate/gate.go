@@ -5,10 +5,30 @@ package gate
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
+
+const maxYAMLBytes = 1 << 20 // 1 MB
+
+func readCapped(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	lr := &io.LimitedReader{R: f, N: limit + 1}
+	buf, err := io.ReadAll(lr)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(buf)) > limit {
+		return nil, fmt.Errorf("%s: yaml exceeds %d bytes", path, limit)
+	}
+	return buf, nil
+}
 
 // Policy is the parsed YAML file.
 type Policy struct {
@@ -73,7 +93,7 @@ type Result struct {
 
 // Load parses a policy YAML file.
 func Load(path string) (*Policy, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := readCapped(path, maxYAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

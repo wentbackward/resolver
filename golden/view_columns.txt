@@ -1,0 +1,36 @@
+# run_summary
+run_id
+model
+resolved_real_model
+overall
+correct_count
+partial_count
+incorrect_count
+error_count
+query_count
+total_ms
+p95_ms
+cfg_real_model
+cfg_thinking
+tool_parser
+mtp
+context_size
+quantization
+
+# comparison
+run_id
+tier
+model
+resolved_real_model
+overall
+run_total_ms
+scenario_id
+score
+elapsed_ms
+cfg_real_model
+cfg_thinking
+cfg_tool_parser
+cfg_reasoning_parser
+cfg_mtp
+cfg_context_size
+cfg_quantization

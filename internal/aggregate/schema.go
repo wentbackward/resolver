@@ -120,8 +120,12 @@ var ddl = []string{
 	// community_benchmarks: truncate-and-reloaded from YAML on every
 	// aggregate. The YAML itself is append-only; this table is a derived
 	// mirror per v2 plan.
+	// model_key is the NormalizeModel() output stored alongside the raw
+	// model name so joins against resolved_real_model are fast and exact
+	// without requiring a UDF at query time.
 	`CREATE TABLE IF NOT EXISTS community_benchmarks (
 		model      VARCHAR NOT NULL,
+		model_key  VARCHAR NOT NULL,
 		benchmark  VARCHAR NOT NULL,
 		metric     VARCHAR NOT NULL,
 		value      DOUBLE NOT NULL,

@@ -37,6 +37,13 @@ SSH to `{HOST}` and read the llm-proxy config:
 ssh {HOST} 'cat /path/to/llm-proxy/config.yaml'
 ```
 
+> **Redact secrets before showing configs to the AI.** Remove any
+> `api_key`, `bearer`, or `authorization` lines from the proxy or vLLM
+> config before pasting output into a chat, logging it, or letting a
+> tool capture it — even transiently. The AI does not need those values
+> to fill in the sidecar, and they should never enter the context
+> window.
+
 Locate the route for `{VIRTUAL_MODEL}`. Record:
 
 - `real_model` (the backing model path).

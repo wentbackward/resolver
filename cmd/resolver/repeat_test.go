@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -99,6 +101,67 @@ func TestTier1RepeatRun(t *testing.T) {
 	}
 	if len(groups) != 1 {
 		t.Errorf("expected all 3 manifests to share a single repeat_group; got %d distinct: %v", len(groups), groups)
+	}
+
+	// Shape assertion: -rep1 scorecard top-level keys and tier names must
+	// match golden/scorecard_example.json so a silent schema regression fails CI.
+	var rep1Path string
+	for _, p := range scorecards {
+		if strings.HasSuffix(p, "-rep1.json") {
+			rep1Path = p
+			break
+		}
+	}
+	goldenPath := filepath.Join(repoRoot(t), "golden", "scorecard_example.json")
+	rep1Raw, err := os.ReadFile(rep1Path)
+	if err != nil {
+		t.Fatalf("read rep1 scorecard: %v", err)
+	}
+	goldenRaw, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden scorecard: %v", err)
+	}
+	var rep1SC, goldenSC map[string]any
+	if err := json.Unmarshal(rep1Raw, &rep1SC); err != nil {
+		t.Fatalf("parse rep1 scorecard: %v", err)
+	}
+	if err := json.Unmarshal(goldenRaw, &goldenSC); err != nil {
+		t.Fatalf("parse golden scorecard: %v", err)
+	}
+	topKeys := func(m map[string]any) []string {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		return keys
+	}
+	rep1Keys := topKeys(rep1SC)
+	goldenKeys := topKeys(goldenSC)
+	if !reflect.DeepEqual(rep1Keys, goldenKeys) {
+		t.Fatalf("scorecard top-level keys drifted: got %v want %v", rep1Keys, goldenKeys)
+	}
+	// Also compare tier names nested under summary.tiers.
+	tierNames := func(sc map[string]any) []string {
+		summary, ok := sc["summary"].(map[string]any)
+		if !ok {
+			return nil
+		}
+		tiers, ok := summary["tiers"].(map[string]any)
+		if !ok {
+			return nil
+		}
+		names := make([]string, 0, len(tiers))
+		for k := range tiers {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		return names
+	}
+	rep1Tiers := tierNames(rep1SC)
+	goldenTiers := tierNames(goldenSC)
+	if rep1Tiers != nil && goldenTiers != nil && !reflect.DeepEqual(rep1Tiers, goldenTiers) {
+		t.Fatalf("scorecard tier names drifted: got %v want %v", rep1Tiers, goldenTiers)
 	}
 }
 

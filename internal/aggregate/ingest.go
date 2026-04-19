@@ -97,9 +97,12 @@ func Run(opts Options) error {
 	return nil
 }
 
+// defaultReportRoots is the walk set used when Options.ReportsDir is empty.
+var defaultReportRoots = []string{"reports", "research/captures"}
+
 func rootsOrDefault(r string) []string {
 	if r == "" {
-		return []string{"reports", "research/captures"}
+		return defaultReportRoots
 	}
 	return strings.Split(r, ",")
 }
@@ -203,9 +206,9 @@ func findScorecard(runDir, runID string) (string, error) {
 	case 1:
 		return candidates[0], nil
 	default:
-		// Sort lexicographically and return the one whose name contains
-		// the closest timestamp to runID's ts prefix. Simpler fallback:
-		// sort descending, return first.
+		// Multiple candidates: sort lexicographically and return the
+		// scorecard.json convention first, else the last entry (newest
+		// timestamp when names embed a sortable timestamp prefix).
 		sort.Strings(candidates)
 		// Try to find scorecard.json by convention (new layout).
 		for _, c := range candidates {
@@ -353,9 +356,9 @@ func reloadCommunity(db *sql.DB, rows []CommunityBenchmark) error {
 	}
 	for _, r := range rows {
 		if _, err := tx.Exec(`INSERT INTO community_benchmarks
-			(model, benchmark, metric, value, source_url, as_of, notes)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			r.Model, r.Benchmark, r.Metric, r.Value, r.SourceURL, r.AsOf, r.Notes,
+			(model, model_key, benchmark, metric, value, source_url, as_of, notes)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			r.Model, NormalizeModel(r.Model), r.Benchmark, r.Metric, r.Value, r.SourceURL, r.AsOf, r.Notes,
 		); err != nil {
 			return err
 		}

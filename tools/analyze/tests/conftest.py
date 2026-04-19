@@ -51,7 +51,7 @@ SCHEMA_DDL = [
         vllm_recipe_path VARCHAR, repeat_group VARCHAR, notes VARCHAR
     )""",
     """CREATE TABLE community_benchmarks (
-        model VARCHAR, benchmark VARCHAR, metric VARCHAR,
+        model VARCHAR, model_key VARCHAR, benchmark VARCHAR, metric VARCHAR,
         value DOUBLE, source_url VARCHAR, as_of DATE, notes VARCHAR,
         PRIMARY KEY (model, benchmark, metric)
     )""",
@@ -125,12 +125,12 @@ def seeded_db(tmp_path: Path) -> Path:
         )
 
         conn.executemany(
-            """INSERT INTO community_benchmarks (model, benchmark, metric,
+            """INSERT INTO community_benchmarks (model, model_key, benchmark, metric,
                  value, source_url, as_of, notes)
-               VALUES (?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?)""",
             [
-                ("Org/ModelA", "bfcl", "overall", 0.82, "https://example.com/bfcl", "2026-03-15", ""),
-                ("Org/ModelB", "mmlu", "5shot", 0.79, "https://example.com/mmlu", "2026-02-01", ""),
+                ("Org/ModelA", "modela", "bfcl", "overall", 0.82, "https://example.com/bfcl", "2026-03-15", ""),
+                ("Org/ModelB", "modelb", "mmlu", "5shot", 0.79, "https://example.com/mmlu", "2026-02-01", ""),
             ],
         )
     finally:

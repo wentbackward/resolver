@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,25 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+const maxYAMLBytes = 1 << 20 // 1 MB
+
+func readCapped(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	lr := &io.LimitedReader{R: f, N: limit + 1}
+	buf, err := io.ReadAll(lr)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(buf)) > limit {
+		return nil, fmt.Errorf("%s: yaml exceeds %d bytes", path, limit)
+	}
+	return buf, nil
+}
 
 // SchemaVersion tracks breaking changes to the manifest shape. Bump when a
 // downstream consumer would have to care. See docs/manifest-schema.md.
@@ -89,7 +109,7 @@ type RunConfig struct {
 
 // LoadSidecar parses a --run-config YAML file.
 func LoadSidecar(path string) (*RunConfig, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := readCapped(path, maxYAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("run-config %s: %w", path, err)
 	}
