@@ -1,0 +1,26 @@
+# Build outputs
+/resolver
+/dist/
+
+# Reports are ephemeral per-run
+/reports/
+
+# OMC local state (worktree ephemera); keep skills/specs/plans
+/.omc/state/
+/.omc/sessions/
+/.omc/logs/
+/.omc/drafts/
+
+# Claude Code local (user-specific) overrides
+/.claude/settings.local.json
+
+# Editor / OS
+*.swp
+*.swo
+*.tmp
+.DS_Store
+
+# Go
+*.test
+*.out
+vendor/

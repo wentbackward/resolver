@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go *)",
+      "Bash(git *)",
+      "Bash(docker *)",
+      "Bash(docker compose *)",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(bash *)",
+      "Bash(sh *)",
+      "Bash(mkdir *)",
+      "Bash(rm *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(touch *)",
+      "Bash(chmod *)",
+      "Bash(ln *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(make *)",
+      "Bash(cargo *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+      "Bash(pkill *)",
+      "Bash(kill *)",
+      "Bash(tar *)",
+      "Bash(gzip *)",
+      "Bash(unzip *)",
+      "Bash(systemctl *)",
+      "Bash(journalctl *)",
+      "Bash(tailscale *)",
+      "Bash(sqlite3 *)"
+    ]
+  }
+}

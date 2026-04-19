@@ -1,0 +1,27 @@
+# Example gate policy for Sweep B (context-size).
+#
+# The sweep plants a needle at a known position in an assembled context.
+# A model that can exploit growing contexts should retrieve the needle
+# reliably at small sizes; the interesting question is at what size
+# retrieval starts to degrade.
+description: |
+  Gate for resolver context-size sweep. Thresholds are deliberately
+  optimistic up to 40K tokens; loosen or tighten based on the specific
+  model's advertised context window and your risk tolerance.
+
+rules:
+  # (1) Needle retrieval is near-perfect at small contexts.
+  - label: needle_found >= 0.80 at context_tokens <= 40000
+    metric: needle_found
+    operator: ">="
+    threshold: 0.80
+    aggregate: mean
+    axis_filter: { axis: context_tokens, le: 40000 }
+
+  # (2) Even at large contexts, the model should at least try (a
+  # completed=0 row means the request timed out or errored).
+  - label: completion rate >= 0.90 across all context sizes
+    metric: completed
+    operator: ">="
+    threshold: 0.90
+    aggregate: mean

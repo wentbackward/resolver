@@ -1,0 +1,18 @@
+[Unit]
+Description=Resolver Tier 1 nightly regression run
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=RESOLVER_ENDPOINT=http://spark-01:4000/v1/chat/completions
+Environment=RESOLVER_MODEL=gresh-general
+# Retention: keep only the 30 most recent scorecards
+ExecStart=/usr/local/bin/resolver --tier 1
+ExecStartPost=/usr/bin/bash -c 'ls -1t /var/lib/resolver/reports/results/*.json 2>/dev/null | tail -n +31 | xargs -r rm -f'
+WorkingDirectory=/var/lib/resolver
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,64 @@
+# The 5 resolver tool definitions from RESOLVER-VALIDATION-SPEC.md §4.
+# Shape matches the OpenAI `tools` array (adapter-specific for v1; the
+# adapter-agnostic abstraction is explicit v2 work).
+tools:
+  - name: exec
+    description: |
+      Run a shell command on a node. Use this for direct operational tasks: checking logs, restarting containers, inspecting resources, running docker commands, etc.
+    parameters:
+      type: object
+      properties:
+        node:
+          type: string
+          description: The node to execute the command on.
+        command:
+          type: string
+          description: The shell command to run.
+      required: [node, command]
+
+  - name: health_check
+    description: |
+      Run a live health check on a service. Returns current status, response time, and consecutive failures. Use this when asked whether a service is up, healthy, or responding.
+    parameters:
+      type: object
+      properties:
+        node:
+          type: string
+          description: The node hosting the service.
+        service:
+          type: string
+          description: The service name.
+      required: [node, service]
+
+  - name: graph_query
+    description: |
+      Query the infrastructure graph. Returns JSON describing nodes, services, and their relationships. Use this for topology questions: dependencies, service listings, configuration lookups. Also use this for impact analysis ("what depends on X", "what breaks if Y goes down").
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Natural-language or structured query over the graph.
+      required: [query]
+
+  - name: escalate
+    description: |
+      Escalate to a human operator. Use this when the request involves complex multi-step changes that require human oversight, such as migrations, provisioning new instances, or infrastructure reconfiguration.
+    parameters:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Why the request needs human oversight.
+      required: [reason]
+
+  - name: refuse
+    description: |
+      Refuse the request. Use this when the request is destructive, ambiguous, out of scope, or lacks enough context to execute safely.
+    parameters:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Why the request is being refused.
+      required: [reason]

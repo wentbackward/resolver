@@ -1,0 +1,4 @@
+# Nightly resolver regression at 02:30 local time.
+# Paste into /etc/cron.d/resolver or user crontab with `crontab -e`.
+# Environment overrides let you run without flags.
+30 2 * * * resolver RESOLVER_ENDPOINT=http://spark-01:4000/v1/chat/completions RESOLVER_MODEL=gresh-general /usr/local/bin/resolver --tier 1 >> /var/log/resolver.log 2>&1

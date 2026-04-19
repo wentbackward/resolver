@@ -1,0 +1,74 @@
+# Tier T1 — Direct commands should call `exec`. Rules per RESOLVER-VALIDATION-SPEC.md §5.
+shared:
+  tier: T1
+scenarios:
+  - id: T1.1
+    query: restart the vllm 35b container
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "restart.*vllm.*35b|docker\\s+restart\\s+.*vllm.*35b"
+      reason_correct: correct restart command on spark-01
+      reason_incorrect: wrong tool or wrong node/command for vllm 35b restart
+
+  - id: T1.2
+    query: show docker ps on spark-01
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "docker\\s+ps"
+      reason_correct: correct docker ps on spark-01
+      reason_incorrect: wrong tool, node, or command
+
+  - id: T1.3
+    query: what's the GPU utilization on spark-01
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "nvidia-smi|gpu"
+      reason_correct: correct GPU check on spark-01
+      reason_incorrect: wrong tool or command for GPU utilization
+
+  - id: T1.4
+    query: show last 50 lines of llm-proxy logs
+    expected_tool: exec
+    rule:
+      # llm-proxy lives on spark-01.
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "logs.*--tail\\s+50|logs.*-n\\s*50|tail.*50"
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "logs"
+      reason_correct: llm-proxy logs on spark-01
+      reason_incorrect: wrong node or no log inspection
+
+  - id: T1.5
+    query: check disk space on claw
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^claw$"
+              command: "df|disk|du"
+      reason_correct: disk-space check on claw
+      reason_incorrect: wrong tool, node, or command

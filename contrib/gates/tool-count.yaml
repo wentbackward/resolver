@@ -1,0 +1,35 @@
+# Example gate policy for Sweep A (tool-count).
+#
+# Rule of thumb the curve is trying to enforce: the model should still pick
+# the right tool even when the tool list grows. The thresholds below are
+# calibrated conservatively — a model that passes today's Tier 1 at 94%+
+# should stay above them up to at least ~50 tools.
+description: |
+  Gate for resolver tool-count sweep. Each rule reduces rows to a single
+  number and asserts a threshold. Edit thresholds to match your risk
+  tolerance; the default comments explain why each threshold was picked.
+
+rules:
+  # (1) Selection accuracy holds at reasonable tool counts.
+  - label: accuracy at tool_count <= 20 must be >= 0.80
+    metric: accuracy
+    operator: ">="
+    threshold: 0.80
+    aggregate: mean
+    axis_filter: { axis: tool_count, le: 20 }
+
+  # (2) Model should never hallucinate tools — calling a name that wasn't
+  # even in the tool list is always a bug.
+  - label: hallucinated tool calls must be zero across all axis points
+    metric: hallucinated_tool_count
+    operator: "=="
+    threshold: 0
+    aggregate: max
+
+  # (3) Wrong-tool rate (calling a decoy instead of a real tool) stays
+  # small even at large tool lists.
+  - label: wrong (decoy) tool calls stay < 2 on average at any axis point
+    metric: wrong_tool_count
+    operator: "<"
+    threshold: 2
+    aggregate: mean

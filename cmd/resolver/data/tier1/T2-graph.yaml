@@ -1,0 +1,85 @@
+# Tier T2 — Graph-aware questions should prefer `graph_query` (with generous
+# fallbacks; see spec §5).
+shared:
+  tier: T2
+scenarios:
+  - id: T2.1
+    query: which services depend on llm-proxy
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "depend|llm-proxy|upstream|downstream"
+      reason_correct: graph query about llm-proxy dependencies
+      reason_incorrect: wrong tool or unrelated graph query
+
+  - id: T2.2
+    query: show status of all services on spark-01
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        # (a) graph query mentioning spark-01 or "services"
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "spark-01|services"
+        # (b) >=3 health_check calls on spark-01
+        - tool_call_count_at_least:
+            name: health_check
+            args_regex:
+              node: "^spark-01$"
+            min: 3
+        # (c) exec on spark-01 matching docker ps|status
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "docker\\s+ps|status"
+        # (d) any graph_query
+        - tool_call_required:
+            name: graph_query
+      partial_if:
+        # 1–2 health_check calls on spark-01
+        - tool_call_count_in_range:
+            name: health_check
+            args_regex:
+              node: "^spark-01$"
+            min: 1
+            max: 2
+      reason_correct: inspected spark-01 services via a valid route
+      reason_partial: partial coverage via 1–2 health_checks
+      reason_incorrect: neither graph query nor health checks nor docker ps on spark-01
+
+  - id: T2.3
+    query: what model is vllm-35b running
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "vllm.*35b|model"
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "vllm|model|inspect|config"
+        - tool_call_required:
+            name: graph_query
+      reason_correct: reasonable route to the vllm-35b model identity
+      reason_incorrect: did not query graph nor inspect on spark-01
+
+  - id: T2.4
+    query: list all docker services across all nodes
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+        - tool_call_count_at_least:
+            name: exec
+            min: 2
+      reason_correct: either a graph_query or ≥2 execs walking multiple nodes
+      reason_incorrect: single exec or wrong tool

@@ -1,0 +1,58 @@
+# Tier T8 — Ambiguous node resolution: service named without node; model
+# must infer from topology.
+shared:
+  tier: T8
+scenarios:
+  - id: T8.1
+    query: restart caddy
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^claw$"
+              command: "restart.*caddy|docker\\s+restart\\s+caddy"
+      partial_if:
+        - tool_call_required: { name: graph_query }
+      reason_correct: correct restart on claw
+      reason_partial: cautious but incomplete (graph_query only)
+      reason_incorrect: wrong node or command
+
+  - id: T8.2
+    query: show prometheus logs
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^claw$"
+              command: "logs.*prometheus|docker\\s+logs\\s+prometheus"
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^claw$"
+              command: "logs"
+      reason_correct: prometheus log inspection on claw
+      reason_incorrect: wrong node or not a log inspection
+
+  - id: T8.3
+    query: how much memory is the VLM using
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^marvin$"
+              command: "docker\\s+stats|docker\\s+inspect|nvidia-smi|free|top"
+      partial_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^marvin$"
+        - tool_call_required: { name: graph_query }
+      reason_correct: memory introspection on marvin
+      reason_partial: marvin exec with different command, or a graph_query
+      reason_incorrect: wrong node or no relevant call
