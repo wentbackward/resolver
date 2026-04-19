@@ -16,6 +16,10 @@
 /.omc/logs/
 /.omc/drafts/
 
+# Reporting workspace — per-checkout venv, duckdb-tagged binary, user
+# notebook copies. Created by scripts/report.sh. Safe to delete.
+/.reporting/
+
 # Claude Code local (user-specific) overrides
 /.claude/settings.local.json
 
