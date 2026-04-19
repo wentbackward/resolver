@@ -235,8 +235,16 @@ func NewMeta(model, endpoint string, ts time.Time, queryCount int) Meta {
 // Write serializes the scorecard to a file at
 // {dir}/{modelSlug}_{iso}.json per spec §7. Returns the full path written.
 func Write(sc Scorecard, dir string, ts time.Time) (string, error) {
+	return WriteWithSuffix(sc, dir, ts, "")
+}
+
+// WriteWithSuffix serializes to {dir}/{modelSlug}_{iso}{suffix}.json. Used
+// by the reproducibility path (`-n N` repeated runs) to avoid clobbering
+// previous scorecards — iterations past the first are written with
+// `-rep{k}` suffix.
+func WriteWithSuffix(sc Scorecard, dir string, ts time.Time, suffix string) (string, error) {
 	slug := scenario.ModelSlug(sc.Meta.Model)
-	name := fmt.Sprintf("%s_%s.json", slug, scenario.FilenameTimestamp(ts))
+	name := fmt.Sprintf("%s_%s%s.json", slug, scenario.FilenameTimestamp(ts), suffix)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

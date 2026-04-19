@@ -158,6 +158,40 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		return doDryRun(scenarios)
 	}
 
+	n := f.nSeeds
+	if n < 1 {
+		n = 1
+	}
+
+	// Reproducibility-repeat loop: `-n N` runs Tier 1 N times in sequence.
+	// k=0 keeps the single-run filename (backwards compatible with scripts
+	// that glob `reports/results/*.json`); k>0 suffixes `-rep{k}` to avoid
+	// clobbering. Every manifest in the batch carries `repeat_group` so
+	// the aggregator can group them.
+	var firstExitCode int
+	var repeatGroup string
+	for k := 0; k < n; k++ {
+		suffix := ""
+		if k > 0 {
+			suffix = fmt.Sprintf("-rep%d", k)
+		}
+		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup)
+		if k == 0 {
+			firstExitCode = code
+			repeatGroup = rg
+		}
+	}
+	return firstExitCode
+}
+
+// runTierOnce is one iteration of the Tier 1 run. Lifted out of runTier
+// so the reproducibility repeat loop can call it N times. `suffix` lands
+// on the scorecard filename (e.g. `-rep2`); `repeatGroup` lands on the
+// manifest runConfig so rows can be joined downstream.
+func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
+	tools []scenario.ToolDef, sysPrompt string, scenarios []scenario.Scenario,
+	suffix, repeatGroup string) (int, string) {
+
 	ad := adapter.NewOpenAIChat(f.endpoint)
 	commonOpts := runner.ExecuteOpts{
 		SystemPrompt: sysPrompt,
@@ -175,7 +209,7 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		rp, cm, err := loadReplay(f.replay)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
-			return 2
+			return 2, repeatGroup
 		}
 		commonOpts.Replayer = rp
 		capturedMeta = cm
@@ -187,14 +221,30 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 
 	// Optional --run-config sidecar: capture proxy + vLLM recipe metadata into
 	// the manifest alongside the scorecard. Unknown values stay unset.
+	var rc *manifest.RunConfig
 	if f.runConfig != "" {
-		rc, err := manifest.LoadSidecar(f.runConfig)
+		loaded, err := manifest.LoadSidecar(f.runConfig)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
-			return 2
+			return 2, repeatGroup
 		}
-		mb = mb.WithRunConfig(rc)
+		rc = loaded
 	}
+	// -n N batch: stamp repeat_group on every manifest in the batch so the
+	// aggregator can join them. k=0 self-seeds (its own RunID is the group);
+	// k>0 inherits the group the caller threaded down. Setting on every
+	// iteration — including k=0 of a single-shot run — means every manifest
+	// always carries the join key; downstream consumers see a repeat_group
+	// of cardinality 1 for single runs and N for -n N batches.
+	if rc == nil {
+		rc = &manifest.RunConfig{}
+	}
+	if repeatGroup != "" {
+		rc.RepeatGroup = repeatGroup
+	} else {
+		rc.RepeatGroup = mb.Current().RunID
+	}
+	mb = mb.WithRunConfig(rc)
 
 	// /v1/models probe (skip under --replay; the scorecard's `meta.model` is
 	// the *virtual* model name, not the real one, so carrying it forward
@@ -241,10 +291,10 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	if outDir == "" {
 		outDir = "reports/results"
 	}
-	path, err := report.Write(sc, outDir, metaTs)
+	path, err := report.WriteWithSuffix(sc, outDir, metaTs, suffix)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		return 2
+		return 2, repeatGroup
 	}
 	mpath, err := mb.Write(outDir)
 	if err != nil {
@@ -267,10 +317,18 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		fmt.Fprintf(os.Stderr, "manifest:  %s\n", mpath)
 	}
 
-	if sc.Summary.Overall == "PASS" {
-		return 0
+	// First iteration of an -n N batch: seed repeat_group with this run's
+	// ID so subsequent iterations carry the join key.
+	outGroup := repeatGroup
+	if outGroup == "" {
+		outGroup = mb.Current().RunID
 	}
-	return 1
+
+	exitCode := 1
+	if sc.Summary.Overall == "PASS" {
+		exitCode = 0
+	}
+	return exitCode, outGroup
 }
 
 func runSweep(ctx context.Context, f flags, dataDir dataSource) int {
