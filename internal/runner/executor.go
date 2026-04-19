@@ -54,7 +54,6 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 			Query:        s.Query,
 			ExpectedTool: s.ExpectedTool,
 		}
-		start := time.Now()
 		var (
 			resp adapter.ChatResponse
 			err  error
@@ -65,7 +64,11 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 			} else {
 				err = fmt.Errorf("no replay entry for scenario %s", s.ID)
 			}
+			// Replay: use the captured elapsedMs so the scorecard is a pure
+			// function of the replay file (byte-exact golden diffs work).
+			pq.ElapsedMs = resp.ElapsedMs
 		} else {
+			start := time.Now()
 			resp, err = ad.Chat(ctx, adapter.ChatRequest{
 				Model:       opts.Model,
 				Messages:    []adapter.Message{sysMsg, {Role: "user", Content: s.Query}},
@@ -75,8 +78,8 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 				APIKey:      opts.APIKey,
 				Timeout:     opts.Timeout,
 			})
+			pq.ElapsedMs = time.Since(start).Milliseconds()
 		}
-		pq.ElapsedMs = time.Since(start).Milliseconds()
 
 		if err != nil {
 			pq.Score = verdict.ScoreError

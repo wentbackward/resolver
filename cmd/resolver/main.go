@@ -40,20 +40,21 @@ const (
 )
 
 type flags struct {
-	endpoint string
-	model    string
-	tier     string
-	scenario string
-	sweep    string
-	axis     string
-	nSeeds   int
-	gate     string
-	parallel bool
-	dryRun   bool
-	apiKey   string
-	replay   string
-	dataDir  string
-	out      string
+	endpoint    string
+	model       string
+	tier        string
+	scenario    string
+	sweep       string
+	axis        string
+	nSeeds      int
+	gate        string
+	parallel    bool
+	dryRun      bool
+	apiKey      string
+	replay      string
+	emitReplay  string
+	dataDir     string
+	out         string
 }
 
 func main() {
@@ -95,13 +96,19 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		APIKey:       f.apiKey,
 		Timeout:      180 * time.Second,
 	}
+
+	// Replay mode: override scorecard meta so the golden diff is a pure
+	// function of the replay file + verdict code (timestamp/model/endpoint
+	// come from the capture, not from the current run).
+	var capturedMeta *report.Meta
 	if f.replay != "" {
-		rp, err := loadReplay(f.replay)
+		rp, cm, err := loadReplay(f.replay)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			return 2
 		}
 		commonOpts.Replayer = rp
+		capturedMeta = cm
 	}
 
 	ts := time.Now().UTC()
@@ -130,14 +137,21 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		perQueries = runner.RunTier1(ctx, ad, scenarios, commonOpts)
 	}
 
-	meta := report.NewMeta(f.model, f.endpoint, ts, len(scenarios))
+	var meta report.Meta
+	metaTs := ts
+	if capturedMeta != nil {
+		meta = *capturedMeta
+		meta.QueryCount = len(scenarios)
+	} else {
+		meta = report.NewMeta(f.model, f.endpoint, ts, len(scenarios))
+	}
 	sc := report.Build(meta, perQueries)
 
 	outDir := f.out
 	if outDir == "" {
 		outDir = "reports/results"
 	}
-	path, err := report.Write(sc, outDir, ts)
+	path, err := report.Write(sc, outDir, metaTs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 2
@@ -145,6 +159,16 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	mpath, err := mb.Write(outDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warn: manifest write failed: %v\n", err)
+	}
+
+	// Emit-replay: capture the live run's per-query responses to a file that
+	// can be fed back via --replay for deterministic golden tests.
+	if f.emitReplay != "" && capturedMeta == nil {
+		if err := writeReplay(f.emitReplay, meta, perQueries); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: emit-replay failed: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "replay:    %s\n", f.emitReplay)
+		}
 	}
 
 	printScorecard(os.Stdout, sc)
@@ -272,6 +296,7 @@ func parseFlags() flags {
 	flag.BoolVar(&f.dryRun, "dry-run", false, "list scenarios without hitting the network")
 	flag.StringVar(&f.apiKey, "api-key", os.Getenv("RESOLVER_API_KEY"), "bearer token (v1 stub for local llm-proxy)")
 	flag.StringVar(&f.replay, "replay", "", "path to canned responses JSON for offline golden tests")
+	flag.StringVar(&f.emitReplay, "emit-replay", "", "capture this live run to a replay JSON (alongside scorecard)")
 	flag.StringVar(&f.dataDir, "data-dir", "", "override embedded data with an external directory")
 	flag.StringVar(&f.out, "out", "", "output directory (default reports/results or reports/sweeps)")
 	flag.Parse()
@@ -532,10 +557,21 @@ func (ds dataSource) readFile(rel string) (string, error) {
 
 // ---- replay ----
 
+// replayEntry is one scenario's captured response. ElapsedMs is preserved
+// so scorecard timings are fully deterministic under --replay.
 type replayEntry struct {
 	ScenarioID string             `json:"scenarioId"`
 	Content    string             `json:"content"`
 	ToolCalls  []adapter.ToolCall `json:"toolCalls"`
+	ElapsedMs  int64              `json:"elapsedMs,omitempty"`
+}
+
+// replayFile is the on-disk envelope. Meta captures the scorecard.meta
+// values at the time of live-capture so replay can reproduce them
+// byte-for-byte.
+type replayFile struct {
+	Meta    report.Meta   `json:"meta"`
+	Entries []replayEntry `json:"entries"`
 }
 
 type replayer struct {
@@ -547,24 +583,64 @@ func (r *replayer) Lookup(id string) (adapter.ChatResponse, bool) {
 	return got, ok
 }
 
-func loadReplay(path string) (*replayer, error) {
+// loadReplay accepts either the new envelope shape (preferred) or a bare
+// array of replayEntry (v0 shape). The bare-array case falls back to zero
+// meta so the caller can proceed with live-run meta.
+func loadReplay(path string) (*replayer, *report.Meta, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("replay: %w", err)
+		return nil, nil, fmt.Errorf("replay: %w", err)
 	}
-	var entries []replayEntry
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		return nil, fmt.Errorf("replay parse: %w", err)
+	var (
+		env     replayFile
+		bare    []replayEntry
+		entries []replayEntry
+		meta    *report.Meta
+	)
+	if err := json.Unmarshal(raw, &env); err == nil && len(env.Entries) > 0 {
+		entries = env.Entries
+		m := env.Meta
+		meta = &m
+	} else if err := json.Unmarshal(raw, &bare); err == nil {
+		entries = bare
+	} else {
+		return nil, nil, fmt.Errorf("replay parse: unrecognised shape in %s", path)
 	}
+
 	r := &replayer{entries: map[string]adapter.ChatResponse{}}
 	for _, e := range entries {
 		r.entries[e.ScenarioID] = adapter.ChatResponse{
 			Content:   e.Content,
 			ToolCalls: e.ToolCalls,
-			ElapsedMs: 0,
+			ElapsedMs: e.ElapsedMs,
 		}
 	}
-	return r, nil
+	return r, meta, nil
+}
+
+// writeReplay emits the envelope from a live run's per-query results.
+func writeReplay(path string, meta report.Meta, results []runner.PerQuery) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil && filepath.Dir(path) != "" {
+		return err
+	}
+	env := replayFile{Meta: meta}
+	for _, r := range results {
+		content := ""
+		if s, ok := r.Content.(string); ok {
+			content = s
+		}
+		env.Entries = append(env.Entries, replayEntry{
+			ScenarioID: r.ID,
+			Content:    content,
+			ToolCalls:  r.ToolCalls,
+			ElapsedMs:  r.ElapsedMs,
+		})
+	}
+	b, err := json.MarshalIndent(env, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o644)
 }
 
 // ---- axis / sweep helpers ----
