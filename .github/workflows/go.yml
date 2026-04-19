@@ -11,12 +11,12 @@ permissions:
 
 jobs:
   test:
-    name: Test (Go ${{ matrix.go }} on ${{ matrix.os }})
+    name: Test (Go ${{ matrix.go }}, CGO-free)
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        go: ['1.22', '1.24']
+        go: ['1.24']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +32,32 @@ jobs:
           go mod download
           go mod verify
 
-      - name: Vet
+      - name: Vet (default)
         run: go vet ./...
 
-      - name: Test
+      - name: Test (default)
         run: go test -count=1 ./...
 
-      - name: Build
+      - name: Build (default, pure-Go)
         run: go build -o /tmp/resolver ./cmd/resolver
+
+  test-duckdb:
+    name: Test (Go 1.24, -tags duckdb, CGO)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Vet (duckdb)
+        run: go vet -tags duckdb ./...
+
+      - name: Test (duckdb)
+        run: go test -tags duckdb -count=1 ./...
+
+      - name: Build (duckdb)
+        run: go build -tags duckdb -o /tmp/resolver-duckdb ./cmd/resolver

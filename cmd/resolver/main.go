@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/aggregate"
 	"github.com/wentbackward/resolver/internal/gate"
 	"github.com/wentbackward/resolver/internal/manifest"
 	"github.com/wentbackward/resolver/internal/report"
@@ -59,7 +60,43 @@ type flags struct {
 }
 
 func main() {
+	// Subcommand dispatch — minimal and flag-compatible. `aggregate` is the
+	// only one today; adding more in v2.1 (e.g., `lint`, `migrate`) will
+	// follow the same shape.
+	if len(os.Args) > 1 && os.Args[1] == "aggregate" {
+		os.Exit(runAggregate(os.Args[2:]))
+	}
 	os.Exit(runMain())
+}
+
+func runAggregate(args []string) int {
+	fs := flag.NewFlagSet("aggregate", flag.ExitOnError)
+	reports := fs.String("reports", "", "comma-separated report roots (default: reports,research/captures)")
+	db := fs.String("db", "reports/resolver.duckdb", "DuckDB file path")
+	community := fs.String("community-benchmarks", "reports/community-benchmarks.yaml", "community benchmarks YAML (skipped if missing)")
+	dry := fs.Bool("dry-run", false, "list runs that would be ingested without writing")
+	_ = fs.Parse(args)
+
+	// Skip community YAML silently if the canonical file doesn't exist yet —
+	// it's scheduled for v2 plan Phase 6. Present its absence as neutral.
+	cbPath := *community
+	if cbPath != "" {
+		if _, err := os.Stat(cbPath); err != nil {
+			cbPath = ""
+		}
+	}
+
+	err := aggregate.Run(aggregate.Options{
+		ReportsDir:          *reports,
+		DBPath:              *db,
+		CommunityBenchmarks: cbPath,
+		DryRun:              *dry,
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 2
+	}
+	return 0
 }
 
 func runMain() int {
