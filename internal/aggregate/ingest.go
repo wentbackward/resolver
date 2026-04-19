@@ -324,15 +324,15 @@ func ingestRun(db *sql.DB, r discovered) error {
 			mtp, mtp_method, mtp_num_speculative_tokens, load_format, quantization,
 			captured_at, proxy_recipe_path, vllm_recipe_path, repeat_group, notes
 		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-			r.runID, rc.VirtualModel, rc.RealModel, rc.Backend, nullableInt(rc.BackendPort),
+			r.runID, rc.VirtualModel, rc.RealModel, rc.Backend, nullableI(rc.BackendPort),
 			nullableF(rc.DefaultTemperature), nullableF(rc.DefaultTopP), nullableI(rc.DefaultTopK),
 			nullableF(rc.DefaultPresencePenalty), nullableF(rc.DefaultFrequencyPenalty),
 			nullableI(rc.DefaultMaxTokens), nullableB(rc.DefaultEnableThinking), nullableB(rc.ClampEnableThinking),
-			rc.Container, nullableInt(rc.TensorParallel), nullableF(rc.GPUMemoryUtilization),
-			nullableInt(rc.ContextSize), nullableInt(rc.MaxNumBatchedTokens),
+			rc.Container, nullableI(rc.TensorParallel), nullableF(rc.GPUMemoryUtilization),
+			nullableI(rc.ContextSize), nullableI(rc.MaxNumBatchedTokens),
 			rc.KVCacheDtype, rc.AttentionBackend, nullableB(rc.PrefixCaching), nullableB(rc.EnableAutoToolChoice),
 			rc.ToolParser, rc.ReasoningParser, rc.ChatTemplate,
-			nullableB(rc.MTP), rc.MTPMethod, nullableInt(rc.MTPNumSpeculativeTokens), rc.LoadFormat, rc.Quantization,
+			nullableB(rc.MTP), rc.MTPMethod, nullableI(rc.MTPNumSpeculativeTokens), rc.LoadFormat, rc.Quantization,
 			rc.CapturedAt, rc.ProxyRecipePath, rc.VLLMRecipePath, rc.RepeatGroup, rc.Notes,
 		); err != nil {
 			return fmt.Errorf("insert run_config: %w", err)
@@ -455,6 +455,10 @@ func nullableB(p *bool) any {
 	}
 	return *p
 }
+// nullableInt is kept for callsites that still hold a scalar int, but it
+// collapses 0 to NULL which may hide a legitimate value. Prefer *int +
+// nullableI at the source struct so the caller can distinguish unset
+// from 0 explicitly. (See MAJOR finding in code review of v2 phase 7.)
 func nullableInt(v int) any {
 	if v == 0 {
 		return nil

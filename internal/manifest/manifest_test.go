@@ -86,8 +86,8 @@ notes: "test sidecar"
 	if got.RunConfig.RealModel != "Qwen/Qwen3.6-35B-A3B-FP8" {
 		t.Errorf("real_model round-trip: got %q", got.RunConfig.RealModel)
 	}
-	if got.RunConfig.BackendPort != 3040 {
-		t.Errorf("backend_port round-trip: got %d", got.RunConfig.BackendPort)
+	if got.RunConfig.BackendPort == nil || *got.RunConfig.BackendPort != 3040 {
+		t.Errorf("backend_port round-trip: got %v", got.RunConfig.BackendPort)
 	}
 	if got.RunConfig.DefaultEnableThinking == nil || !*got.RunConfig.DefaultEnableThinking {
 		t.Errorf("default_enable_thinking did not round-trip")

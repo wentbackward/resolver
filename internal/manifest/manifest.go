@@ -40,7 +40,7 @@ const SchemaVersion = 2
 type RunConfig struct {
 	// Proxy / backing model
 	RealModel   string `yaml:"real_model,omitempty" json:"real_model,omitempty"`
-	BackendPort int    `yaml:"backend_port,omitempty" json:"backend_port,omitempty"`
+	BackendPort *int   `yaml:"backend_port,omitempty" json:"backend_port,omitempty"`
 	Backend     string `yaml:"backend,omitempty" json:"backend,omitempty"`
 
 	// Proxy route defaults (harness forces temperature=0 per spec §2; these
@@ -54,24 +54,27 @@ type RunConfig struct {
 	DefaultEnableThinking   *bool    `yaml:"default_enable_thinking,omitempty" json:"default_enable_thinking,omitempty"`
 	ClampEnableThinking     *bool    `yaml:"clamp_enable_thinking,omitempty" json:"clamp_enable_thinking,omitempty"`
 
-	// Engine (vLLM) layer
-	Container             string `yaml:"container,omitempty" json:"container,omitempty"`
-	TensorParallel        int    `yaml:"tensor_parallel,omitempty" json:"tensor_parallel,omitempty"`
-	GPUMemoryUtilization  *float64 `yaml:"gpu_memory_utilization,omitempty" json:"gpu_memory_utilization,omitempty"`
-	ContextSize           int    `yaml:"context_size,omitempty" json:"context_size,omitempty"`
-	MaxNumBatchedTokens   int    `yaml:"max_num_batched_tokens,omitempty" json:"max_num_batched_tokens,omitempty"`
-	KVCacheDtype          string `yaml:"kv_cache_dtype,omitempty" json:"kv_cache_dtype,omitempty"`
-	AttentionBackend      string `yaml:"attention_backend,omitempty" json:"attention_backend,omitempty"`
-	PrefixCaching         *bool  `yaml:"prefix_caching,omitempty" json:"prefix_caching,omitempty"`
-	EnableAutoToolChoice  *bool  `yaml:"enable_auto_tool_choice,omitempty" json:"enable_auto_tool_choice,omitempty"`
-	ToolParser            string `yaml:"tool_parser,omitempty" json:"tool_parser,omitempty"`
-	ReasoningParser       string `yaml:"reasoning_parser,omitempty" json:"reasoning_parser,omitempty"`
-	ChatTemplate          string `yaml:"chat_template,omitempty" json:"chat_template,omitempty"`
-	MTP                   *bool  `yaml:"mtp,omitempty" json:"mtp,omitempty"`
-	MTPMethod             string `yaml:"mtp_method,omitempty" json:"mtp_method,omitempty"`
-	MTPNumSpeculativeTokens int  `yaml:"mtp_num_speculative_tokens,omitempty" json:"mtp_num_speculative_tokens,omitempty"`
-	LoadFormat            string `yaml:"load_format,omitempty" json:"load_format,omitempty"`
-	Quantization          string `yaml:"quantization,omitempty" json:"quantization,omitempty"`
+	// Engine (vLLM) layer. Every nullable field is a pointer so that
+	// "unset" is distinguishable from a legitimate zero value
+	// (tensor_parallel=0 CPU-only, mtp_num_speculative_tokens=0 MTP off,
+	// etc.). Principle #4: "unknown" is valid and must not alias to 0.
+	Container               string   `yaml:"container,omitempty" json:"container,omitempty"`
+	TensorParallel          *int     `yaml:"tensor_parallel,omitempty" json:"tensor_parallel,omitempty"`
+	GPUMemoryUtilization    *float64 `yaml:"gpu_memory_utilization,omitempty" json:"gpu_memory_utilization,omitempty"`
+	ContextSize             *int     `yaml:"context_size,omitempty" json:"context_size,omitempty"`
+	MaxNumBatchedTokens     *int     `yaml:"max_num_batched_tokens,omitempty" json:"max_num_batched_tokens,omitempty"`
+	KVCacheDtype            string   `yaml:"kv_cache_dtype,omitempty" json:"kv_cache_dtype,omitempty"`
+	AttentionBackend        string   `yaml:"attention_backend,omitempty" json:"attention_backend,omitempty"`
+	PrefixCaching           *bool    `yaml:"prefix_caching,omitempty" json:"prefix_caching,omitempty"`
+	EnableAutoToolChoice    *bool    `yaml:"enable_auto_tool_choice,omitempty" json:"enable_auto_tool_choice,omitempty"`
+	ToolParser              string   `yaml:"tool_parser,omitempty" json:"tool_parser,omitempty"`
+	ReasoningParser         string   `yaml:"reasoning_parser,omitempty" json:"reasoning_parser,omitempty"`
+	ChatTemplate            string   `yaml:"chat_template,omitempty" json:"chat_template,omitempty"`
+	MTP                     *bool    `yaml:"mtp,omitempty" json:"mtp,omitempty"`
+	MTPMethod               string   `yaml:"mtp_method,omitempty" json:"mtp_method,omitempty"`
+	MTPNumSpeculativeTokens *int     `yaml:"mtp_num_speculative_tokens,omitempty" json:"mtp_num_speculative_tokens,omitempty"`
+	LoadFormat              string   `yaml:"load_format,omitempty" json:"load_format,omitempty"`
+	Quantization            string   `yaml:"quantization,omitempty" json:"quantization,omitempty"`
 
 	// Capture metadata
 	VirtualModel    string `yaml:"virtual_model,omitempty" json:"virtual_model,omitempty"`
