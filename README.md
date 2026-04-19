@@ -6,9 +6,11 @@
 [![Go 1.22+](https://img.shields.io/badge/go-1.22%2B-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A Go test harness for benchmarking LLMs on **agentic tool-use** tasks.
+A Go test harness for benchmarking LLMs as **resolvers for agentic work in high-consequence environments** — domains where a bad tool call, a hallucinated argument, or a missed escalation has real cost (downtime, data loss, harm, money).
 
-It runs a corpus of infrastructure-management queries against any OpenAI-compatible chat endpoint, checks whether the model picks the right tool with the right arguments, and emits a scorecard with pass/fail gates. On top of that baseline it runs meta-sweeps that probe two questions most public benchmarks don't answer directly:
+It runs a corpus of queries against any OpenAI-compatible chat endpoint and checks whether the model picks the right tool with the right arguments, refuses destructive or off-topic requests, escalates the multi-step work that needs human judgment, and reasons about topology and dependencies. The reference corpus is **sysadm-over-SSH** — chosen because it bundles all those properties into one domain — but the template ports to clinical triage, SCADA, financial ops, customer-service tool stacks, etc. by swapping the system prompt, tool set, and scenario YAML.
+
+The harness emits a scorecard with five gated pass/fail thresholds; on top of that baseline it runs meta-sweeps that probe two questions most public benchmarks don't answer directly:
 
 - **At what tool-list size does a given model start hallucinating or mis-selecting?**
 - **At what context size does a given model stop retrieving a planted fact reliably?**

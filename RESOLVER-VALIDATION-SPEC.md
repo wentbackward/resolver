@@ -1,10 +1,36 @@
 # Resolver Validation Benchmark — Language-Agnostic Spec
 
-A portable specification for the 31-query benchmark that evaluates whether a
-language model can serve as the resolver for an infrastructure-management
-agent (sysadm). The reference implementation lives in
-`test/resolver-validation/` (Node.js, built-ins only). This document contains
-everything a fresh repo needs to re-implement it in any language.
+A portable specification for a 31-query benchmark that evaluates whether a
+language model can serve as the **resolver** for agentic work in
+high-consequence environments — domains where a bad tool call, a hallucinated
+argument, or a missed escalation has real cost (downtime, data loss, harm,
+money).
+
+The reference corpus targets **sysadm-over-SSH**: a lightweight assistant
+that plans and executes operational tasks across a small fleet. Sysadm is
+useful as the canonical corpus because it bundles every property this
+benchmark is designed to measure into one domain:
+
+- Tools are simple but their effects are irreversible.
+- Multi-step diagnostics are the norm, not the exception.
+- Destructive requests must be refused or escalated.
+- Off-topic requests must be refused outright.
+- Some questions are topology lookups, not operations.
+- Named entities (services) must be resolved to their location (nodes) from
+  context.
+- Cross-entity dependencies matter.
+
+The spec is **template, not domain-locked**. Adopters can re-instantiate the
+same capability tests against any real-world operational platform —
+customer-service tool stacks, clinical triage, industrial SCADA, financial
+operations, e-commerce order orchestration — by swapping the system prompt
+(§3), the tool set (§4), and the scenario corpus (§5) while preserving the
+structure: tier breakdown, regex-backed verdicts, gated pass thresholds,
+scorecard shape. The harness makes no assumptions about the domain.
+
+The reference implementation lives in `test/resolver-validation/` (Node.js,
+built-ins only). This document contains everything a fresh repo needs to
+re-implement it in any language.
 
 ---
 
@@ -12,15 +38,23 @@ everything a fresh repo needs to re-implement it in any language.
 
 The benchmark measures a model's ability to:
 
-1. Pick the **right tool** for a natural-language infra request.
-2. Pass **correct arguments** (node, command, service) — not hallucinated ones.
-3. **Refuse** destructive / out-of-scope requests.
-4. **Escalate** multi-step provisioning requests to a human.
+1. Pick the **right tool** for a natural-language request in a domain where
+   tools have real-world effects.
+2. Pass **correct arguments** — not hallucinated ones.
+3. **Refuse** destructive or out-of-scope requests.
+4. **Escalate** complex multi-step work that requires human judgment.
 5. Perform **multi-step diagnostics** by chaining tool calls.
-6. **Resolve a service name to its node** from the fixed topology.
-7. Reason about **cross-service dependencies** by querying the graph.
+6. **Resolve an entity name to its location / owner / context** from the
+   system's declared topology.
+7. Reason about **cross-entity dependencies** by querying a graph.
 
-A model that clears all pass thresholds is considered suitable as a resolver.
+These are generic properties of high-consequence agentic work. A model that
+clears the gated thresholds on the reference (sysadm) corpus is considered
+suitable as a resolver for workloads with this capability profile.
+Domain-specific adaptations (clinical, SCADA, finance, etc.) should use the
+same tier structure and gating rules; a model's behaviour on sysadm is a
+leading indicator of its behaviour on other high-consequence domains, not
+proof.
 
 ---
 

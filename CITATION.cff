@@ -2,12 +2,21 @@ cff-version: 1.2.0
 message: "If you use resolver in your research or engineering work, please cite it."
 title: "resolver: a Go test harness for benchmarking LLMs on agentic tool-use tasks"
 abstract: >-
-  resolver is a Go test harness that evaluates whether an LLM can serve as the
-  resolver for an infrastructure-management agent. Tier 1 runs 31 single-turn
-  routing queries across 10 tiers with five gated pass/fail thresholds. Tier 2
-  adds multi-turn scenarios with mocked data-producing tools, plus meta-sweeps
-  over tool-list size and context size. Scorecards are byte-exact against the
-  RESOLVER-VALIDATION-SPEC so cross-model history remains comparable.
+  resolver is a Go test harness that evaluates whether an LLM can serve as a
+  resolver for agentic work in high-consequence environments — domains where
+  a bad tool call, a hallucinated argument, or a missed escalation has real
+  cost. The reference corpus targets sysadm-over-SSH (irreversible tools,
+  destructive-request refusal, multi-step diagnostics, topology reasoning,
+  escalation) but is template-not-domain-locked: adopters can re-instantiate
+  the same capability tests against clinical triage, SCADA, financial
+  operations, customer-service tool stacks, and similar platforms by
+  swapping the system prompt, tool set, and scenario corpus while preserving
+  the tier structure, regex-backed verdicts, and gated pass thresholds.
+  Tier 1 runs 31 single-turn routing queries across 10 tiers with five
+  gated pass/fail thresholds. Tier 2 adds multi-turn scenarios with mocked
+  data-producing tools, plus meta-sweeps over tool-list size and context
+  size. Scorecards are byte-exact against the RESOLVER-VALIDATION-SPEC so
+  cross-model history remains comparable.
 type: software
 authors:
   - family-names: Gresham
