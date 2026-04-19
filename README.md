@@ -1,5 +1,11 @@
 # resolver
 
+[![Go](https://github.com/wentbackward/resolver/actions/workflows/go.yml/badge.svg)](https://github.com/wentbackward/resolver/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/wentbackward/resolver.svg)](https://pkg.go.dev/github.com/wentbackward/resolver)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wentbackward/resolver)](https://goreportcard.com/report/github.com/wentbackward/resolver)
+[![Go 1.22+](https://img.shields.io/badge/go-1.22%2B-blue)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A Go test harness for benchmarking LLMs on **agentic tool-use** tasks.
 
 It runs a corpus of infrastructure-management queries against any OpenAI-compatible chat endpoint, checks whether the model picks the right tool with the right arguments, and emits a scorecard with pass/fail gates. On top of that baseline it runs meta-sweeps that probe two questions most public benchmarks don't answer directly:
