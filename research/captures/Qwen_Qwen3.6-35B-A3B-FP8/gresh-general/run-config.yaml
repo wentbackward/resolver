@@ -1,0 +1,41 @@
+# Captured config for gresh-general — backed by Qwen_Qwen3.6-35B-A3B-FP8 at capture time.
+# Harness sends temperature=0 per spec §2, so the sampling defaults below are
+# what the llm-proxy *would* have applied had the client not overridden.
+# enable_thinking is clamped by the route, so the harness cannot unset it.
+
+virtual_model: gresh-general
+real_model: Qwen/Qwen3.6-35B-A3B-FP8
+backend_port: 3040
+captured_at: 2026-04-19
+
+# Proxy route layer (from llm-proxy config.yaml)
+default_temperature: 0.7
+default_top_p: 0.95
+
+
+
+default_max_tokens: 16384
+default_enable_thinking: true
+clamp_enable_thinking: true
+
+# vLLM engine layer (from recipe)
+container: vllm-node-tf5
+tensor_parallel: 1
+gpu_memory_utilization: 0.40
+context_size: 131072
+max_num_batched_tokens: 16384
+kv_cache_dtype: fp8
+attention_backend: flashinfer
+prefix_caching: true
+enable_auto_tool_choice: true
+tool_parser: qwen3_xml
+reasoning_parser: qwen3
+chat_template: unsloth.jinja
+mtp: true
+mtp_method: qwen3_next_mtp
+mtp_num_speculative_tokens: 1
+load_format: fastsafetensors
+quantization: fp8
+env_VLLM_MARLIN_USE_ATOMIC_ADD: "1"
+
+notes: "baseline; thinking on; temp overridden to 0 by harness"

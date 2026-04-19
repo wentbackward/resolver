@@ -1,0 +1,25 @@
+# Captured config for gresh-gemma4-moe — HF-serverless backed.
+# Engine-level parameters (MTP, tool parser, reasoning parser, context window,
+# quantization) are controlled by HuggingFace's serving infra and are not
+# exposed through any client-facing API; marked "unknown" per principle #4
+# of the v2 plan.
+
+virtual_model: gresh-gemma4-moe
+real_model: google/gemma-4-26B-A4B-it
+backend: hf-serverless
+captured_at: 2026-04-19
+
+# Proxy route layer (no sampling overrides in llm-proxy config for this route)
+default_temperature: null
+default_max_tokens: null
+default_enable_thinking: unknown
+clamp_enable_thinking: unknown
+
+# vLLM / engine layer (not accessible for HF-hosted models)
+context_size: unknown
+tool_parser: unknown
+reasoning_parser: unknown
+mtp: unknown
+quantization: unknown
+
+notes: "Google Gemma-4 26B MoE instruct"

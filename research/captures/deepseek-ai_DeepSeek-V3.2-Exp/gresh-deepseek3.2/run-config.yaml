@@ -1,0 +1,25 @@
+# Captured config for gresh-deepseek3.2 — HF-serverless backed.
+# Engine-level parameters (MTP, tool parser, reasoning parser, context window,
+# quantization) are controlled by HuggingFace's serving infra and are not
+# exposed through any client-facing API; marked "unknown" per principle #4
+# of the v2 plan.
+
+virtual_model: gresh-deepseek3.2
+real_model: deepseek-ai/DeepSeek-V3.2-Exp
+backend: hf-serverless
+captured_at: 2026-04-19
+
+# Proxy route layer (no sampling overrides in llm-proxy config for this route)
+default_temperature: null
+default_max_tokens: null
+default_enable_thinking: unknown
+clamp_enable_thinking: unknown
+
+# vLLM / engine layer (not accessible for HF-hosted models)
+context_size: unknown
+tool_parser: unknown
+reasoning_parser: unknown
+mtp: unknown
+quantization: unknown
+
+notes: "DeepSeek V3.2 experimental"
