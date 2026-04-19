@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/tokenizer"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/tokenizer"
 )
 
 func regexpMustCompile(p string) *regexp.Regexp { return regexp.MustCompile(p) }

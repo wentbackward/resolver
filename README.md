@@ -5,7 +5,7 @@ Go test harness for benchmarking LLMs on agentic tool-use tasks. Ports the 31-qu
 ## Install
 
 ```
-go install github.com/gresham/resolver/cmd/resolver@latest
+go install github.com/wentbackward/resolver/cmd/resolver@latest
 ```
 
 Or from a checkout:

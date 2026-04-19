@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gresham/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 func TestModelSlug(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/gresham/resolver
+module github.com/wentbackward/resolver
 
 go 1.24.2
 

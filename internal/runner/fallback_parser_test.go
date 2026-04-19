@@ -3,7 +3,7 @@ package runner_test
 import (
 	"testing"
 
-	"github.com/gresham/resolver/internal/runner"
+	"github.com/wentbackward/resolver/internal/runner"
 )
 
 func TestFallbackParser(t *testing.T) {

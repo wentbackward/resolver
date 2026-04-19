@@ -3,9 +3,9 @@ package verdict_test
 import (
 	"testing"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 func mkScenario(correct, partial []scenario.Matcher) *scenario.Scenario {

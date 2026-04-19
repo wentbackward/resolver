@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gresham/resolver/internal/decoys"
+	"github.com/wentbackward/resolver/internal/decoys"
 )
 
 func TestGenerateDeterministic(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gresham/resolver/internal/gate"
+	"github.com/wentbackward/resolver/internal/gate"
 )
 
 func writeTemp(t *testing.T, name, content string) string {

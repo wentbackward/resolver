@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/gresham/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 // domains are four semantically distinct categories so the decoys cover

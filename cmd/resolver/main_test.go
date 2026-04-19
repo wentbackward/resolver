@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 // TestVerdictToAcc locks the gate-mapping: correct=1.0, partial=0.5, other=0.

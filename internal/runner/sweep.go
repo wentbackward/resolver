@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/decoys"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/tokenizer"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/decoys"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/tokenizer"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 // SweepKind enumerates the v1 sweeps.

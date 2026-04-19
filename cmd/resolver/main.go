@@ -18,14 +18,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/gate"
-	"github.com/gresham/resolver/internal/manifest"
-	"github.com/gresham/resolver/internal/report"
-	"github.com/gresham/resolver/internal/runner"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/tokenizer"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/gate"
+	"github.com/wentbackward/resolver/internal/manifest"
+	"github.com/wentbackward/resolver/internal/report"
+	"github.com/wentbackward/resolver/internal/runner"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/tokenizer"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 //go:embed all:data

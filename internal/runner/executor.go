@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 // ExecuteOpts carries shared runtime configuration.

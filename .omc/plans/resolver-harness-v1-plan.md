@@ -54,7 +54,7 @@ Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` th
 5. Defaults: `--endpoint http://spark-01:4000/v1/chat/completions` and `--model gresh-general` (llm-proxy virtual → Qwen/Qwen3.6-35B-A3B-FP8). Env vars `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` override defaults with lower precedence than flags.
 6. Serial execution per-query (spec §9), `temperature=0`, 180s per-request timeout. Sweep seeds may run in parallel only behind an explicit `--parallel` flag.
 7. Every run writes a sibling `manifest.json` (model, adapter config, scenario hashes, seeds, timestamps). Scorecard `meta` stays byte-identical to spec §7 keys; Go-specific metadata lives in the manifest only.
-8. Module path: `github.com/gresham/resolver` (derived from user email `gresham@mediavisual.com`).
+8. Module path: `github.com/wentbackward/resolver` (matches the GitHub repo at https://github.com/wentbackward/resolver).
 
 ---
 
@@ -119,7 +119,7 @@ Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` th
 **Files:** `go.mod`, `go.sum`, `README.md`, `.gitignore`, `cmd/resolver/main.go`, `internal/adapter/adapter.go`, `internal/scenario/scenario.go`.
 
 1. `git init .` (currently not a repo). `.gitignore` excludes `reports/`, `.omc/state/`, `.omc/sessions/`, `.omc/logs/`, `*.tmp`.
-2. `go mod init github.com/gresham/resolver` — resolved now per ADR.
+2. `go mod init github.com/wentbackward/resolver` — resolved per ADR.
 3. Define shared types in `internal/scenario/scenario.go`. **All v1 fields are declared here in Phase 1, optional where Tier 1 does not use them, so Phase 3 adds data, not schema**:
    - `Scenario { ID, Tier, Query string, Turns []Turn, AvailableTools []ToolDef, SuccessCriteria []SuccessCriterion, ExpectedTool string, Fixtures []string, ContextGrowthProfile string }`.
    - `Turn { Role string ("user"|"tool"|"assistant"), Content string, ScriptForTool string }`.
@@ -224,7 +224,7 @@ Runnable in order. Each gates the next phase.
 
 ## ADR — Architectural Decision Record
 
-**Decision:** Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` that ports the 31-query resolver-validation spec as Tier 1 with byte-exact scorecard parity, and extends it with multi-turn scenarios, mocked data-producing tools, tool-count sweep (A), and context-size sweep (B) in v1. Only the `openai-chat` adapter ships. Scenario schema is unified in Phase 1 so Tier 1 is a degenerate 1-turn form of the Tier 2 schema. Verdicts are pattern-based; no LLM judge in v1. Module path `github.com/gresham/resolver`.
+**Decision:** Build a Go 1.22+ single-binary test harness at `/home/code/hacking/resolver/` that ports the 31-query resolver-validation spec as Tier 1 with byte-exact scorecard parity, and extends it with multi-turn scenarios, mocked data-producing tools, tool-count sweep (A), and context-size sweep (B) in v1. Only the `openai-chat` adapter ships. Scenario schema is unified in Phase 1 so Tier 1 is a degenerate 1-turn form of the Tier 2 schema. Verdicts are pattern-based; no LLM judge in v1. Module path `github.com/wentbackward/resolver`.
 
 **Drivers:**
 1. Time-to-useful-sweep — the tool-count + context-size curves are the headline deliverable.
@@ -268,7 +268,7 @@ Runnable in order. Each gates the next phase.
   - Tokenizer library pinned (primary: `sugarme/tokenizer` + vendored Qwen json; fallback: heuristic) with explicit bail-out condition.
   - Manifest schema formalized with golden-test AC; includes `goVersion`, `commitSha`, `tokenizerMode`, `manifestVersion`.
   - CLI AC gains `--dry-run`, `--api-key` (stubbed), `--replay`; precedence doc added.
-  - Module path resolved to `github.com/gresham/resolver`.
+  - Module path resolved to `github.com/wentbackward/resolver`.
   - README AC now requires worked scorecard excerpt + principle #5 caveat + HTTP-auth note.
   - Risks 9 (manifest drift) and 10 (Round 3 reversal) added.
   - Full ADR section added.

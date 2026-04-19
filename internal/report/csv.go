@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/gresham/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 // CSVWriter is a thin streaming wrapper around encoding/csv.

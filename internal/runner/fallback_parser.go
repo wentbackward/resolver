@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gresham/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/adapter"
 )
 
 var knownToolNames = map[string]struct{}{

@@ -13,9 +13,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gresham/resolver/internal/runner"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/runner"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 // Meta keys pinned to spec §7. `nodeVersion` retained as a literal key even

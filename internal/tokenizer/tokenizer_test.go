@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gresham/resolver/internal/tokenizer"
+	"github.com/wentbackward/resolver/internal/tokenizer"
 )
 
 func TestHeuristicCount(t *testing.T) {

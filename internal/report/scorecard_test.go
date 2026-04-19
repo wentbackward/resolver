@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/report"
-	"github.com/gresham/resolver/internal/runner"
-	"github.com/gresham/resolver/internal/scenario"
-	"github.com/gresham/resolver/internal/verdict"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/report"
+	"github.com/wentbackward/resolver/internal/runner"
+	"github.com/wentbackward/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/verdict"
 )
 
 // TestScorecardShape locks the spec §7 shape. If this breaks, cross-model

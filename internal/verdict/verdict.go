@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gresham/resolver/internal/adapter"
-	"github.com/gresham/resolver/internal/scenario"
+	"github.com/wentbackward/resolver/internal/adapter"
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 // Score is one of the four spec values.
