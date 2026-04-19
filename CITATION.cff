@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use resolver in your research or engineering work, please cite it."
+title: "resolver: a Go test harness for benchmarking LLMs on agentic tool-use tasks"
+abstract: >-
+  resolver is a Go test harness that evaluates whether an LLM can serve as the
+  resolver for an infrastructure-management agent. Tier 1 runs 31 single-turn
+  routing queries across 10 tiers with five gated pass/fail thresholds. Tier 2
+  adds multi-turn scenarios with mocked data-producing tools, plus meta-sweeps
+  over tool-list size and context size. Scorecards are byte-exact against the
+  RESOLVER-VALIDATION-SPEC so cross-model history remains comparable.
+type: software
+authors:
+  - family-names: Gresham
+    given-names: Paul
+    alias: wentbackward
+    affiliation: Paul Gresham Advisory LLC
+    orcid: "https://orcid.org/0009-0005-2975-1187"
+repository-code: "https://github.com/wentbackward/resolver"
+url: "https://github.com/wentbackward/resolver"
+license: MIT
+keywords:
+  - LLM
+  - benchmark
+  - tool-use
+  - agentic
+  - evaluation
+  - function-calling
+  - long-context
+version: "0.1.0"
+date-released: 2026-04-19

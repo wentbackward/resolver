@@ -32,7 +32,10 @@ import (
 var embeddedData embed.FS
 
 const (
-	defaultEndpoint = "http://spark-01:4000/v1/chat/completions"
+	// defaultEndpoint points at a local OpenAI-compatible chat endpoint.
+	// Override via --endpoint or $RESOLVER_ENDPOINT for other deployments
+	// (e.g. a remote llm-proxy on your network or a hosted provider).
+	defaultEndpoint = "http://localhost:4000/v1/chat/completions"
 	defaultModel    = "gresh-general"
 )
 

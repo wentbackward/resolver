@@ -53,7 +53,7 @@ resolver --sweep context-size --axis 5000,40000,80000 -n 2 \
   --gate contrib/gates/context-size.yaml
 ```
 
-Defaults: `--endpoint http://spark-01:4000/v1/chat/completions`, `--model gresh-general`. Both are overridable via `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` (flag > env > built-in default).
+Defaults: `--endpoint http://localhost:4000/v1/chat/completions`, `--model gresh-general`. Both are overridable via `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` (flag > env > built-in default).
 
 ---
 
@@ -173,7 +173,7 @@ The `.omc/plans/resolver-v2-plan.md` file is the consensus-approved plan for the
 - Verdicts are pattern-based — no LLM-as-judge in v1.
 - HITL approval flows are v2.
 - Scenario YAML currently declares the OpenAI `tools` block shape directly. An adapter-agnostic abstraction is v2.
-- `--api-key` is accepted but unused in v1 — it's stubbed for future auth adapters; the default local `spark-01:4000` llm-proxy does not require auth.
+- `--api-key` is accepted but unused in v1 — it's stubbed for future auth adapters; a local `localhost:4000` llm-proxy does not require auth.
 - `explosive` context-growth profile is not implemented in v1 (returns a clear error); `flat` and `moderate` ship.
 - Token counting uses a word × 1.33 heuristic. A bundled Qwen tokenizer is planned for v1.1 and is flagged `approximate: true` in the manifest today.
 
@@ -201,6 +201,22 @@ The v2 plan wires a hand-curated `reports/community-benchmarks.yaml` join so cro
 
 ---
 
+## Citation
+
+If you use resolver in research or engineering work, please cite it. GitHub auto-generates a "Cite this repository" button from [`CITATION.cff`](./CITATION.cff); a BibTeX entry is included for convenience:
+
+```bibtex
+@software{gresham_resolver_2026,
+  author       = {Gresham, Paul},
+  title        = {resolver: a Go test harness for benchmarking LLMs on agentic tool-use tasks},
+  year         = {2026},
+  version      = {0.1.0},
+  url          = {https://github.com/wentbackward/resolver},
+  organization = {Paul Gresham Advisory LLC},
+  license      = {MIT}
+}
+```
+
 ## License
 
-MIT (planned — see `LICENSE` once added).
+[MIT](./LICENSE) — Copyright (c) 2026 Paul Gresham Advisory LLC.
