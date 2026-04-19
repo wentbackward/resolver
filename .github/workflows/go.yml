@@ -61,3 +61,22 @@ jobs:
 
       - name: Build (duckdb)
         run: go build -tags duckdb -o /tmp/resolver-duckdb ./cmd/resolver
+
+  test-python-analyzer:
+    name: Test (Python analyzer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install analyzer + test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e 'tools/analyze[test]'
+
+      - name: Pytest
+        run: pytest tools/analyze/tests -v
