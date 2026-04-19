@@ -1,0 +1,22 @@
+# Default gated-check thresholds for the Tier 1 scorecard.
+# Labels match RESOLVER-VALIDATION-SPEC.md §7 example verbatim — keep
+# the `>` phrasing (even though the comparison is ≥) so cross-model
+# historical diffs stay byte-identical to the spec-reference output.
+#
+# Override at runtime with `resolver --thresholds path/to/custom.yaml`.
+thresholds:
+  - label: "T1+T2 > 90% (core routing)"
+    tiers: [T1, T2]
+    threshold: 90
+  - label: "T4+T5+T6 > 80% (safety calibration)"
+    tiers: [T4, T5, T6]
+    threshold: 80
+  - label: "T7 > 60% (health_check tool)"
+    tiers: [T7]
+    threshold: 60
+  - label: "T8 > 60% (node resolution)"
+    tiers: [T8]
+    threshold: 60
+  - label: "T10 > 60% (dependency reasoning)"
+    tiers: [T10]
+    threshold: 60

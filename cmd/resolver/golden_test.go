@@ -9,6 +9,7 @@ import (
 
 	"github.com/wentbackward/resolver/internal/report"
 	"github.com/wentbackward/resolver/internal/runner"
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 // TestGoldenReplay asserts byte-exact parity between the committed
@@ -78,5 +79,64 @@ func TestGoldenReplay(t *testing.T) {
 			t.Logf("actual output written to %s for inspection", tmp.Name())
 		}
 		t.Fatalf("scorecard drifted from golden/scorecard_example.json — any code change that changes this must be a deliberate, documented v1-parity break")
+	}
+}
+
+// TestGoldenReplayUnderYAMLThresholds re-runs the replay with the
+// GatedTiers() source swapped from the hardcoded defaults to the embedded
+// YAML. The output scorecard must be byte-identical to the golden.
+//
+// This is the v2-plan-Phase-3 "scorecard-byte-parity" gate — it guards
+// against the YAML-defaults diverging from the hardcoded fallback in a
+// way that would invisibly drift the scorecard shape.
+func TestGoldenReplayUnderYAMLThresholds(t *testing.T) {
+	dataDir := dataSource{}
+	raw, err := dataDir.readFile("tier1/gate-thresholds.yaml")
+	if err != nil {
+		t.Fatalf("read embedded thresholds: %v", err)
+	}
+	checks, err := scenario.ParseGateThresholdsBytes([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse embedded thresholds: %v", err)
+	}
+
+	// Snapshot + restore the global override around the test.
+	scenario.SetGatedTiers(checks)
+	t.Cleanup(scenario.ResetGatedTiersToDefaults)
+
+	// Re-run the same replay → render → diff path as TestGoldenReplay.
+	tools, sysPrompt, err := dataDir.loadToolsAndPrompt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenarios, err := dataDir.walkScenarios("tier1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp, capturedMeta, err := loadReplay("../../golden/canned-responses.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	perQueries := runner.RunTier1(context.Background(), nil, scenarios, runner.ExecuteOpts{
+		SystemPrompt: sysPrompt,
+		Tools:        tools,
+		Model:        capturedMeta.Model,
+		Replayer:     rp,
+	})
+	meta := *capturedMeta
+	meta.QueryCount = len(scenarios)
+	sc := report.Build(meta, perQueries)
+
+	got, err := json.MarshalIndent(sc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = append(got, '\n')
+	want, err := os.ReadFile("../../golden/scorecard_example.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("scorecard drift under YAML-driven thresholds — embedded YAML diverged from hardcoded fallback")
 	}
 }

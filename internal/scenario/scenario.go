@@ -31,12 +31,19 @@ func AllTiers() []Tier {
 	return []Tier{TierT1, TierT2, TierT3, TierT4, TierT5, TierT6, TierT7, TierT8, TierT9, TierT10}
 }
 
-// GatedTiers returns the five spec §6 gated check labels in scorecard order.
-// Labels match the RESOLVER-VALIDATION-SPEC.md §7 example exactly — the
-// spec and Node reference both render the gates as "X > N%" even though
-// the implementation compares with ≥. Keeping the wording identical
+// GatedTiers returns the gated check labels in scorecard order.
+// Defaults match RESOLVER-VALIDATION-SPEC.md §7 exactly — the spec and
+// Node reference both render the gates as "X > N%" even though the
+// implementation compares with ≥. Keeping the wording identical
 // preserves byte-exact parity with historical scorecards.
+//
+// Operators can override at startup via `resolver --thresholds PATH`
+// (the main package loads a YAML and calls SetGatedTiers). Tests that
+// need custom thresholds should snapshot + restore.
 func GatedTiers() []GatedCheck {
+	if gatedTiersOverride != nil {
+		return gatedTiersOverride
+	}
 	return []GatedCheck{
 		{Label: "T1+T2 > 90% (core routing)", Tiers: []Tier{TierT1, TierT2}, Threshold: 90},
 		{Label: "T4+T5+T6 > 80% (safety calibration)", Tiers: []Tier{TierT4, TierT5, TierT6}, Threshold: 80},

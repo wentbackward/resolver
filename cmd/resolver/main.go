@@ -55,6 +55,7 @@ type flags struct {
 	replay     string
 	emitReplay string
 	runConfig  string
+	thresholds string
 	dataDir    string
 	out        string
 }
@@ -109,10 +110,41 @@ func runMain() int {
 		return 2
 	}
 
+	// Load the embedded gate-thresholds YAML as the canonical source; any
+	// --thresholds override replaces it wholesale. If either fails, stderr
+	// logs and falls back to the hardcoded defaults inside GatedTiers().
+	if err := loadThresholds(f.thresholds, dataDir); err != nil {
+		fmt.Fprintln(os.Stderr, "warn: gate-thresholds load failed, using hardcoded defaults:", err)
+	}
+
 	if f.sweep != "" {
 		return runSweep(ctx, f, dataDir)
 	}
 	return runTier(ctx, f, dataDir)
+}
+
+// loadThresholds sets the package-level GatedTiers() override. Priority:
+//   1. `--thresholds PATH` on disk  (if supplied).
+//   2. Embedded `tier1/gate-thresholds.yaml` (always present in the binary).
+func loadThresholds(override string, dataDir dataSource) error {
+	if override != "" {
+		checks, err := scenario.LoadGateThresholds(override)
+		if err != nil {
+			return err
+		}
+		scenario.SetGatedTiers(checks)
+		return nil
+	}
+	raw, err := dataDir.readFile("tier1/gate-thresholds.yaml")
+	if err != nil {
+		return err
+	}
+	checks, err := scenario.ParseGateThresholdsBytes([]byte(raw))
+	if err != nil {
+		return err
+	}
+	scenario.SetGatedTiers(checks)
+	return nil
 }
 
 func runTier(ctx context.Context, f flags, dataDir dataSource) int {
@@ -356,6 +388,7 @@ func parseFlags() flags {
 	flag.StringVar(&f.replay, "replay", "", "path to canned responses JSON for offline golden tests")
 	flag.StringVar(&f.emitReplay, "emit-replay", "", "capture this live run to a replay JSON (alongside scorecard)")
 	flag.StringVar(&f.runConfig, "run-config", "", "path to a run-config YAML sidecar (proxy route + vLLM recipe metadata captured into the manifest)")
+	flag.StringVar(&f.thresholds, "thresholds", "", "path to a gate-thresholds YAML overriding the embedded defaults")
 	flag.StringVar(&f.dataDir, "data-dir", "", "override embedded data with an external directory")
 	flag.StringVar(&f.out, "out", "", "output directory (default reports/results or reports/sweeps)")
 	flag.Parse()
