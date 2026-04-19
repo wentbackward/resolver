@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 1,
+  "runId": "20260419T154004-eb74152acc648157",
+  "model": "gresh-creative",
+  "adapter": "openai-chat",
+  "tokenizerMode": "heuristic",
+  "endpoint": "http://spark-01:4000/v1/chat/completions",
+  "tier": "1",
+  "parallel": false,
+  "scenarioHashes": {},
+  "startedAt": "2026-04-19T15:40:04Z",
+  "finishedAt": "2026-04-19T15:40:47Z",
+  "goVersion": "go1.24.2",
+  "commitSha": "e2ccdb0bf153bea581cf9bfbf58964c74b93fa21",
+  "hostName": "avocado"
+}
