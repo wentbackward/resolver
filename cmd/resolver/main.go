@@ -58,6 +58,7 @@ type flags struct {
 	thresholds string
 	dataDir    string
 	out        string
+	role       string
 }
 
 func main() {
@@ -443,10 +444,11 @@ func parseFlags() flags {
 	flag.StringVar(&f.endpoint, "endpoint", envOr("RESOLVER_ENDPOINT", defaultEndpoint), "chat completions endpoint")
 	flag.StringVar(&f.model, "model", envOr("RESOLVER_MODEL", defaultModel), "model identifier")
 	flag.StringVar(&f.tier, "tier", "1", "tier to run: 1 or 2")
+	flag.StringVar(&f.role, "role", "", "role to run (e.g. agentic-toolcall); loads roles/<role>/*.yaml with its own system prompt")
 	flag.StringVar(&f.scenario, "scenario", "", "path to a single scenario YAML (overrides --tier)")
 	flag.StringVar(&f.sweep, "sweep", "", "sweep name: tool-count|context-size")
 	flag.StringVar(&f.axis, "axis", "", "comma-separated axis values (overrides sweep default)")
-	flag.IntVar(&f.nSeeds, "n", 1, "seeds per sweep axis point")
+	flag.IntVar(&f.nSeeds, "n", 3, "seeds per sweep axis point")
 	flag.StringVar(&f.gate, "gate", "", "gate policy YAML (sweep mode)")
 	flag.BoolVar(&f.parallel, "parallel", false, "run sweep seeds in parallel")
 	flag.BoolVar(&f.dryRun, "dry-run", false, "list scenarios without hitting the network")
@@ -478,13 +480,18 @@ func max1(n int) int {
 // ---- scenario loading helpers ----
 
 func loadTier(f flags, ds dataSource) ([]scenario.ToolDef, string, []scenario.Scenario, error) {
-	tools, sys, err := ds.loadToolsAndPrompt()
+	tools, sys, err := ds.loadToolsAndPromptFor(f.role)
 	if err != nil {
 		return nil, "", nil, err
 	}
 	var scenarios []scenario.Scenario
 	if f.scenario != "" {
 		scenarios, err = scenario.LoadFile(f.scenario)
+		if err != nil {
+			return nil, "", nil, err
+		}
+	} else if f.role != "" {
+		scenarios, err = ds.walkScenarios("roles/" + f.role)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -601,11 +608,19 @@ func (ds dataSource) mockFixtures() runner.MockFixturesFS {
 }
 
 func (ds dataSource) loadToolsAndPrompt() ([]scenario.ToolDef, string, error) {
+	return ds.loadToolsAndPromptFor("")
+}
+
+func (ds dataSource) loadToolsAndPromptFor(role string) ([]scenario.ToolDef, string, error) {
 	tools, err := ds.loadToolsFrom("shared/tools/resolver-tools.yaml")
 	if err != nil {
 		return nil, "", fmt.Errorf("load tools: %w", err)
 	}
-	sys, err := ds.readFile("tier1/system-prompt.md")
+	sysPath := "tier1/system-prompt.md"
+	if role != "" {
+		sysPath = "roles/" + role + "/system-prompt.md"
+	}
+	sys, err := ds.readFile(sysPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("load system prompt: %w", err)
 	}
