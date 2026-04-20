@@ -4,11 +4,14 @@ Centralised list of unresolved questions and deferred decisions across plans. Ap
 
 ---
 
-## resolver v2.1 role-organised test suite — 2026-04-20
+## resolver v2.2 (v2.1 follow-ups) — opened 2026-04-20
 
-- [ ] **hitl role threshold** — Spec leaves this implicit. Planner proposes 60% informational. Confirm or mark role ungated. (See `resolver-v2-1-plan.md` §12 item 3.)
-- [ ] **reducer-sexp directory shape** — Ship as 0-scenario placeholder in v2.1, or defer role-dir creation entirely to v2.2? Current plan ships the placeholder. (See `resolver-v2-1-plan.md` §12 item 4.)
-- [ ] **min_p sidecar handling** (Critic scenario H) — Add `MinP *float64` to the `RunConfig` sidecar struct now, or document as a known gap in `research/captures-v1/README.md`? Planner leans toward adding the field (small schema addition, durable audit). Architect to confirm before Phase 8 starts. (See `resolver-v2-1-plan.md` §12 item 5 + §6 scenario H.)
+- [ ] **hitl role threshold** — Spec left this implicit; v2.1 shipped 60% informational. Firm it up once enough hitl captures exist to argue for a harder floor. (See `resolver-v2-1-plan.md` §9 Follow-ups.)
+- [ ] **reducer-sexp port** — v2.1 ships a 0-scenario placeholder. Port sshwarm's `live-sexp-suite-*.json` into `roles/reducer-sexp/` and wire derived rates. (See `resolver-v2-1-plan.md` §9 Follow-ups.)
+- [ ] **Reducer-json true 5-rate aggregation** — v2.1 shipped a stopgap: per-scenario verdict carries one number, `parse_validity` proxied as correct/total. Replace with independent derivation of all 5 rates (parse_validity, schema_validity, envelope_purity, locality_compliance, status_correctness) from the matcher boolean vectors. (See `RELEASE-NOTES-v2.1.md` "Known gaps".)
+- [ ] **"Harness ships N" cosmetic warning** — `internal/aggregate/ingest.go:244` fires spuriously against v3 manifests during some ingest paths; ingest still succeeds best-effort. Root-cause + clean up. No data integrity impact. (See `RELEASE-NOTES-v2.1.md` "Known gaps".)
+- [ ] **Sshwarm schema drift automation** — `cmd/resolver/data/shared/schemas/reducer-envelope.json` is a point-in-time mirror. Add a GitHub Action that diffs it against sshwarm's live contract weekly. (See `resolver-v2-1-plan.md` §9 Follow-ups.)
+- [ ] **Re-score archived captures through v2.1 scorers** — Would let the heat-map carry a historical line for the 8 archived models. Not shipped in v2.1. (See `resolver-v2-1-plan.md` §9 Follow-ups.)
 
 ---
 
@@ -20,4 +23,5 @@ Centralised list of unresolved questions and deferred decisions across plans. Ap
   3. "End your response immediately after the tool call. Do not provide post-call explanations."
   The shared `cmd/resolver/data/shared/system-prompts/tools-preamble.md` file mentioned in the plan **is not created**. Instead, the hints are baked into the tool-calling roles' own `system-prompt.md`. Manifest `prompt_rev` hashes the role-specific prompt body (not a shared preamble that doesn't exist).
 - [x] **Classifier label inventory (2026-04-20)** — Decision: `graph_query` is a **separate label**, not an exec-subtype. Rationale: graph_query is fundamentally about memory/recency — it tests whether the model uses latest info instead of making assumptions from prior context. Conflating it with `exec` loses that signal. Final label set: `{exec, diagnose, refuse, escalate, hitl, graph_query}`. Classifier scenarios exercise each label with at least one prompt that is "decoy-tempted" toward another label.
-- [x] **Archived-scorecard root-key rewrite (2026-04-20)** — Decision: **rewrite `summary` → `summary_v2_legacy`** on archive. Rationale: prevents naive cross-directory jq merges between v1-era and v2.1-era scorecards. Not a lot of data; trivial to reproduce if anything breaks. Phase 8 archive step must apply this rewrite via a single-line `jq` or Go pass. (Previously flagged as optional mitigation to R10; promoted to required.)
+- [x] **Archived-scorecard root-key rewrite (2026-04-20)** — Decision: **rewrite `summary` → `summary_v2_legacy`** on archive. Rationale: prevents naive cross-directory jq merges between v1-era and v2.1-era scorecards. Not a lot of data; trivial to reproduce if anything breaks. Phase 8 archive step applied this rewrite; see `research/captures-v1/README.md` for the shape-detector one-liner. (Previously flagged as optional mitigation to R10; promoted to required and shipped.)
+- [x] **min_p sidecar handling (2026-04-20)** — Decision: **add `MinP *float64` to the `RunConfig` sidecar struct** in manifest v3. Shipped in `d088e38` (Phase 4). Archived gresh-reasoner captures predate the field and are documented as a known reproducibility gap in `research/captures-v1/README.md`.

@@ -175,12 +175,20 @@ The `.omc/plans/resolver-v2-plan.md` file is the consensus-approved plan for the
 
 ---
 
-## v2: Comparing models
+## v2.1: Comparing models by role
 
-v2 adds cross-run aggregation + opinionated analysis on top of the v1
-scorecard. All v2 additions are _additive_ — v1 scorecards still run,
-still pass `TestGoldenReplay`, and still ingest cleanly into the
-aggregator.
+v2.1 retires the single `overall` PASS/FAIL in favour of **per-role verdicts** —
+each of the 13 roles (`agentic-toolcall`, `safety-refuse`, `safety-escalate`,
+`health-check`, `node-resolution`, `dep-reasoning`, `hitl`, `multiturn`,
+`tool-count-survival`, `long-context`, `reducer-json`, `reducer-sexp`,
+`classifier`) gates independently against its own threshold. Cross-model
+comparison is now a **role-coverage heat-map**: real-model rows × role
+columns, cells tinted PASS/FAIL/ERROR. The signal you get back: "this model
+is great at routing but falls over on safety-refuse" — not one monolithic
+number.
+
+See [`RELEASE-NOTES-v2.1.md`](./RELEASE-NOTES-v2.1.md) for the full
+breaking-change list, migration notes, and known gaps.
 
 ### One-command reports
 
@@ -194,10 +202,12 @@ On first run (~30 s) this sets up a repo-local Python venv, builds
 notebook workspace from the tracked templates, and launches Jupyter.
 Subsequent runs are near-instant except for the aggregate step.
 
-Open `quickstart.ipynb` → **Kernel → Restart & Run All** to see
-`run_summary`, `comparison`, and `community_benchmarks` rendered as
-DataFrames from raw DuckDB SQL. `con` is the read-only connection —
-edit any cell or add your own query.
+Open `quickstart.ipynb` → **Kernel → Restart & Run All** to see the
+role-coverage heat-map, per-role thresholds, and `community_benchmarks`
+rendered as DataFrames from raw DuckDB SQL. `con` is the read-only
+connection — edit any cell or add your own query. The heat-map reads
+from the new `role_coverage` DuckDB view — one row per (run_id, role)
+with verdict + threshold_met + expected vs observed scenario counts.
 
 All ephemera — venv, binary, your notebook workspace — live under
 `.reporting/` (gitignored). `rm -rf .reporting/` to reset; the next
@@ -231,7 +241,8 @@ the tunnel.
 
 ```bash
 # Direct DuckDB CLI:
-duckdb reports/resolver.duckdb "SELECT model, overall, correct_count FROM run_summary"
+duckdb reports/resolver.duckdb \
+  "SELECT model, role, verdict, threshold_met FROM role_coverage ORDER BY run_id DESC"
 
 # LLM-authored Markdown comparison report (POSTs to the reporter LLM):
 pip install -e 'tools/analyze[notebook,test]'
@@ -242,13 +253,14 @@ analyze report --dry-run          # prompt + data to stdout, no network
 Key artefacts:
 
 - [`docs/build.md`](./docs/build.md) — dual build (pure-Go default; CGO-enabled `-tags duckdb`).
-- [`docs/manifest-schema.md`](./docs/manifest-schema.md) — manifest v2 shape + `runConfig` sidecar fields.
+- [`docs/manifest-schema.md`](./docs/manifest-schema.md) — manifest v3 shape (`role`, `promptRev`, `MinP`) + `runConfig` sidecar fields.
 - [`docs/community-benchmarks-schema.md`](./docs/community-benchmarks-schema.md) — public-benchmark YAML schema + append-only contract.
 - [`docs/prompts/run-benchmark.md`](./docs/prompts/run-benchmark.md) — AI-orchestration prompt for running a capture end-to-end.
-- [`docs/prompts/compare-models.md`](./docs/prompts/compare-models.md) — Jinja prompt the Python analyzer uses to author reports.
+- [`docs/prompts/compare-models.md`](./docs/prompts/compare-models.md) — Jinja prompt the Python analyzer uses to author role-aware reports.
 - [`docs/prompts/scrape-community-benchmarks.md`](./docs/prompts/scrape-community-benchmarks.md) — AI-orchestration prompt for appending verified leaderboard rows.
-- [`tools/analyze/`](./tools/analyze/) — Python package, `analyze report` CLI, reproducibility notebook.
-- [`research/captures/`](./research/captures/) — 13 real-model reference runs seeding the aggregator on day one.
+- [`tools/analyze/`](./tools/analyze/) — Python package, `analyze report` CLI, heat-map + reproducibility notebooks.
+- [`research/captures/`](./research/captures/) — fresh v2.1 captures (manifest v3; role-organised).
+- [`research/captures-v1/`](./research/captures-v1/) — archived pre-v2.1 captures (scorecards rewritten to `summary_v2_legacy`; see the README there).
 
 ## Known v1 limitations
 

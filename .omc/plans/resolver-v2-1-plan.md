@@ -1,6 +1,6 @@
 # Resolver v2.1 — Role-Organised Test Suite (FINAL, iteration 2)
 
-**Status:** FINAL — Planner draft + Architect + Critic consensus merged (2026-04-20).
+**Status:** `COMPLETE — executed 2026-04-20`. All 9 phases landed on `main` (local). See [`RELEASE-NOTES-v2.1.md`](../../RELEASE-NOTES-v2.1.md) for the user-facing summary.
 **Mode:** RALPLAN-DR **Deliberate** (destructive archive + schema break + benchmark baseline reset).
 **Source spec:** `.omc/specs/deep-interview-resolver-v2-1-test-suite.md` (final ambiguity 11%, PASSED).
 **Authors:** Planner (iter 1 draft), Architect (iter 2 improvements), Critic (iter 2 overrides + additions), Planner (iter 2 merge).
@@ -520,17 +520,20 @@ Steps grouped into phases. Phase order is **sequential**; within-phase work is p
 - No new supply-chain surface — no JSON-schema library, `govulncheck` scope unchanged.
 - Reducer-sexp (v2.2) can piggy-back on the same matcher family.
 
-**Consequences:**
-- Upsides: simpler audit, no new dep, unified metric aggregation, reducer-sexp port is cheap.
-- Downsides: `Matcher.Validate()` switch grows to 12 kinds; one more engine sub-module to maintain; **manual drift-check between sshwarm and resolver schemas is required** — mitigated by the shared schema file + R5 mitigation (diff review on next port + unit test against a canned sshwarm report).
+**Consequences (as-shipped, 2026-04-20):**
+- Upsides realised: matcher engine grew by the 6 planned kinds without a JSON-schema library dep; role-level 5-rate aggregation for reducer-json is a straight-line boolean sum — no validator-output reparsing. Shared envelope schema file lives at `cmd/resolver/data/shared/schemas/reducer-envelope.json`. Reducer-sexp piggy-backs on the same matcher family (directory scaffolded, port deferred).
+- Downsides realised: `Matcher.Validate()` switch did grow to 12 kinds as predicted; drift-review burden between sshwarm and resolver remains manual (R5 mitigation stands). Reducer-json 5-rate surface shipped as a **stopgap** — per-scenario verdict reports one derived number; true independent 5-rate aggregation is a v2.2 follow-up (see below).
+- Unplanned side-effect: the aggregator's "harness ships N" guard fired cosmetically during smoke captures against v3 manifests — ingest succeeded best-effort; no data integrity impact. Clean-up tracked as a v2.2 cosmetic follow-up.
 
 **Follow-ups (explicit v2.2+ scope, OUT of scope for v2.1):**
-- Port sshwarm S-exp scenarios into `roles/reducer-sexp/`.
+- Port sshwarm S-exp scenarios into `roles/reducer-sexp/` (currently an empty placeholder).
+- True independent 5-rate reducer-json aggregation (parse_validity, schema_validity, envelope_purity, locality_compliance, status_correctness) — replaces the v2.1 stopgap per-scenario verdict.
+- Clean up the cosmetic "harness ships N" warning path in `internal/aggregate/ingest.go` (likely a stale reference surfaced via a non-guarded path).
 - Add `reasoner` and `code-gen` roles.
 - Live sshwarm schema-mirror automation (GitHub Action that diffs the two schema files weekly).
-- Archived scorecard root-key rewrite pass (`summary` → `summary_v2_legacy`) so researcher jq queries converge.
 - Consider a Go JSON-schema lib if the matcher zoo exceeds 20 kinds.
-- One-time re-score of archived captures through v2.1 scorers (for like-for-like historical comparison).
+- One-time re-score of archived captures through v2.1 scorers (for like-for-like historical comparison line on the heat-map).
+- Firm up the `hitl` role threshold once enough hitl-role captures exist to argue for a harder floor (currently 60% informational).
 
 ---
 
