@@ -41,15 +41,15 @@ func TestEmbeddedYAMLMatchesHardcodedDefaults(t *testing.T) {
 			t.Errorf("[%d] label drift:\n  hard: %q\n  yaml: %q", i, hard[i].Label, got[i].Label)
 		}
 		if got[i].Threshold != hard[i].Threshold {
-			t.Errorf("[%d] threshold drift: hard=%d yaml=%d", i, hard[i].Threshold, got[i].Threshold)
+			t.Errorf("[%d] threshold drift: hard=%g yaml=%g", i, hard[i].Threshold, got[i].Threshold)
 		}
-		if len(got[i].Tiers) != len(hard[i].Tiers) {
-			t.Errorf("[%d] tiers length drift: hard=%d yaml=%d", i, len(hard[i].Tiers), len(got[i].Tiers))
+		if len(got[i].LegacyTiers) != len(hard[i].LegacyTiers) {
+			t.Errorf("[%d] tiers length drift: hard=%d yaml=%d", i, len(hard[i].LegacyTiers), len(got[i].LegacyTiers))
 			continue
 		}
-		for j := range hard[i].Tiers {
-			if got[i].Tiers[j] != hard[i].Tiers[j] {
-				t.Errorf("[%d] tier[%d] drift: hard=%s yaml=%s", i, j, hard[i].Tiers[j], got[i].Tiers[j])
+		for j := range hard[i].LegacyTiers {
+			if got[i].LegacyTiers[j] != hard[i].LegacyTiers[j] {
+				t.Errorf("[%d] tier[%d] drift: hard=%s yaml=%s", i, j, hard[i].LegacyTiers[j], got[i].LegacyTiers[j])
 			}
 		}
 	}
@@ -109,10 +109,10 @@ func TestOverrideRoundtrip(t *testing.T) {
 	scenario.ResetGatedTiersToDefaults()
 	defaults := scenario.GatedTiers()
 
-	custom := []scenario.GatedCheck{{Label: "custom", Tiers: []scenario.Tier{scenario.TierT1}, Threshold: 50}}
+	custom := []scenario.GatedCheck{{Role: "custom", LegacyTiers: []scenario.Tier{scenario.TierT1}, Threshold: 50}}
 	scenario.SetGatedTiers(custom)
 	got := scenario.GatedTiers()
-	if len(got) != 1 || got[0].Label != "custom" {
+	if len(got) != 1 || got[0].Role != "custom" {
 		t.Errorf("SetGatedTiers didn't swap: %+v", got)
 	}
 

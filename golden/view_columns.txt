@@ -2,7 +2,6 @@
 run_id
 model
 resolved_real_model
-overall
 correct_count
 partial_count
 incorrect_count
@@ -19,10 +18,8 @@ quantization
 
 # comparison
 run_id
-tier
 model
 resolved_real_model
-overall
 run_total_ms
 scenario_id
 score
@@ -34,3 +31,15 @@ cfg_reasoning_parser
 cfg_mtp
 cfg_context_size
 cfg_quantization
+
+# role_coverage
+run_id
+model
+resolved_real_model
+role
+verdict
+threshold_met
+threshold
+scenario_count_expected
+scenario_count_observed
+metrics_json

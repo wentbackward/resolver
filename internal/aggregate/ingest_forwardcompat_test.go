@@ -24,7 +24,7 @@ func futureManifest(runID string) string {
   "adapter": "openai-chat",
   "tokenizerMode": "heuristic",
   "endpoint": "http://future/v1/chat/completions",
-  "tier": "1",
+  "role": "agentic-toolcall",
   "parallel": false,
   "scenarioHashes": {},
   "startedAt": "2026-04-19T00:00:00Z",

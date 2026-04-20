@@ -5,6 +5,7 @@ package aggregate
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,6 +17,11 @@ import (
 	_ "github.com/marcboeker/go-duckdb"
 	"github.com/wentbackward/resolver/internal/manifest"
 )
+
+// ErrUnsupportedSchema is returned when a pre-v3 manifest is encountered.
+// v2.1 is a forward-only schema: v1/v2 captures live under
+// research/captures-v1/ and are read forensically, never re-ingested.
+var ErrUnsupportedSchema = errors.New("unsupported manifest schema (pre-v3); v2.1 aggregator ingests manifestVersion == 3 only")
 
 // Run walks the report roots, ingests every manifest + sibling scorecard
 // (and any run-config.yaml alongside), reloads community_benchmarks from
@@ -231,6 +237,9 @@ func ingestRun(db *sql.DB, r discovered) error {
 	if err := json.Unmarshal(manifestRaw, &m); err != nil {
 		return fmt.Errorf("parse manifest: %w", err)
 	}
+	if m.ManifestVersion < 3 {
+		return fmt.Errorf("%w: %s (manifestVersion=%d)", ErrUnsupportedSchema, r.manifestPath, m.ManifestVersion)
+	}
 	if m.ManifestVersion > manifest.SchemaVersion {
 		fmt.Fprintf(os.Stderr, "warn: manifest %s reports version %d (harness ships %d); ingesting best-effort\n",
 			r.manifestPath, m.ManifestVersion, manifest.SchemaVersion)
@@ -255,6 +264,7 @@ func ingestRun(db *sql.DB, r discovered) error {
 		`DELETE FROM runs WHERE run_id = ?`,
 		`DELETE FROM queries WHERE run_id = ?`,
 		`DELETE FROM run_config WHERE run_id = ?`,
+		`DELETE FROM role_scorecards WHERE run_id = ?`,
 	} {
 		if _, err := db.Exec(stmt, r.runID); err != nil {
 			return err
@@ -268,11 +278,30 @@ func ingestRun(db *sql.DB, r discovered) error {
 	defer tx.Rollback()
 
 	var correct, partial, incorrect, errs int
-	for _, t := range sc.Summary.Tiers {
-		correct += t.Correct
-		partial += t.Partial
-		incorrect += t.Incorrect
-		errs += t.Errors
+	// v2.1 scorecards carry per-role counters on Summary.Roles; the
+	// tier-keyed map is still emitted during the migration window.
+	// Read from whichever is populated — Roles wins when both are set.
+	if len(sc.Summary.Roles) > 0 {
+		for _, rr := range sc.Summary.Roles {
+			correct += rr.Correct
+			partial += rr.Partial
+			incorrect += rr.Incorrect
+			errs += rr.Errors
+		}
+	} else {
+		for _, t := range sc.Summary.Tiers {
+			correct += t.Correct
+			partial += t.Partial
+			incorrect += t.Incorrect
+			errs += t.Errors
+		}
+	}
+	// `overall` is nullable per v2.1 schema v2: v3 scorecards carry the
+	// verdict per-role, so write NULL when Roles is populated. Archived
+	// v1/v2 scorecards (read forensically) still have it.
+	var overallVal any = sc.Summary.Overall
+	if len(sc.Summary.Roles) > 0 {
+		overallVal = nil
 	}
 	_, err = tx.Exec(`INSERT INTO runs (
 		run_id, scorecard_path, manifest_path,
@@ -284,7 +313,7 @@ func ingestRun(db *sql.DB, r discovered) error {
 		r.runID, r.scorecardPath, r.manifestPath,
 		m.Tier, m.Sweep, m.Model, m.ResolvedRealModel, m.Endpoint, m.Adapter, m.TokenizerMode,
 		m.ManifestVersion, parseTS(m.StartedAt), parseTS(m.FinishedAt), m.GoVersion, m.CommitSHA, m.HostName,
-		sc.Summary.Overall, sc.Summary.Timing.TotalMs, sc.Summary.Timing.AvgMs, sc.Summary.Timing.P50Ms, sc.Summary.Timing.P95Ms, sc.Summary.Timing.MaxMs,
+		overallVal, sc.Summary.Timing.TotalMs, sc.Summary.Timing.AvgMs, sc.Summary.Timing.P50Ms, sc.Summary.Timing.P95Ms, sc.Summary.Timing.MaxMs,
 		sc.Meta.QueryCount, correct, partial, incorrect, errs,
 	)
 	if err != nil {
@@ -308,6 +337,22 @@ func ingestRun(db *sql.DB, r discovered) error {
 			q.ElapsedMs, string(tcJSON), content,
 		); err != nil {
 			return fmt.Errorf("insert queries: %w", err)
+		}
+	}
+
+	// role_scorecards: one row per role on the v2.1 scorecard. Scorecards
+	// written during the migration window (Roles empty) contribute no
+	// rows — consumer queries must treat missing rows as "role not
+	// captured", not "role failed".
+	for role, rr := range sc.Summary.Roles {
+		if _, err := tx.Exec(`INSERT INTO role_scorecards (
+			run_id, role, verdict, threshold_met, threshold,
+			metrics_json, scenario_count_expected, scenario_count_observed
+		) VALUES (?,?,?,?,?,?,?,?)`,
+			r.runID, role, nullableS(rr.Verdict), nullableB(rr.ThresholdMet), nullableF(rr.Threshold),
+			rawJSONString(rr.Metrics), nullableI(rr.ScenarioCountExpected), nullableI(rr.ScenarioCountObserved),
+		); err != nil {
+			return fmt.Errorf("insert role_scorecards: %w", err)
 		}
 	}
 
@@ -414,10 +459,30 @@ type scorecardShape struct {
 		NodeVersion string `json:"nodeVersion"`
 	} `json:"meta"`
 	Summary struct {
+		// Overall is retained for read-path compatibility with archived
+		// v1/v2 scorecards but is not populated for v3. v2.1 runs carry
+		// the verdict per-role on Roles below.
 		Overall string `json:"overall"`
 		Tiers   map[string]struct {
 			Correct, Partial, Incorrect, Errors, Total, Pct int
 		} `json:"tiers"`
+		// Roles (v2.1): one entry per role bucket. Optional during the
+		// migration window — scorecards written before the report-package
+		// rewrite keep `tiers` and leave Roles nil; ingest tolerates the
+		// gap and writes zero rows into role_scorecards.
+		Roles map[string]struct {
+			Verdict                 string          `json:"verdict"`
+			ThresholdMet            *bool           `json:"thresholdMet"`
+			Threshold               *float64        `json:"threshold"`
+			Metrics                 json.RawMessage `json:"metrics"`
+			ScenarioCountExpected   *int            `json:"scenarioCountExpected"`
+			ScenarioCountObserved   *int            `json:"scenarioCountObserved"`
+			Correct                 int             `json:"correct"`
+			Partial                 int             `json:"partial"`
+			Incorrect               int             `json:"incorrect"`
+			Errors                  int             `json:"errors"`
+			Total                   int             `json:"total"`
+		} `json:"roles"`
 		Timing struct {
 			TotalMs, AvgMs, P50Ms, P95Ms, MaxMs int64
 			Count                               int
@@ -425,6 +490,7 @@ type scorecardShape struct {
 	} `json:"summary"`
 	Results []struct {
 		Tier         string `json:"tier"`
+		Role         string `json:"role"`
 		ID           string `json:"id"`
 		Query        string `json:"query"`
 		ExpectedTool string `json:"expectedTool"`
@@ -466,6 +532,21 @@ func nullableB(p *bool) any {
 		return nil
 	}
 	return *p
+}
+func nullableS(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// rawJSONString stores a RawMessage as its JSON text for the
+// metrics_json column. Empty RawMessage ≡ absent ≡ NULL.
+func rawJSONString(r json.RawMessage) any {
+	if len(r) == 0 {
+		return nil
+	}
+	return string(r)
 }
 // nullableInt is kept for callsites that still hold a scalar int, but it
 // collapses 0 to NULL which may hide a legitimate value. Prefer *int +

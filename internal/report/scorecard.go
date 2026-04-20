@@ -32,7 +32,7 @@ type Meta struct {
 type Threshold struct {
 	Label     string `json:"label"`
 	Pct       int    `json:"pct"`
-	Threshold int    `json:"threshold"`
+	Threshold float64 `json:"threshold"`
 	Pass      bool   `json:"pass"`
 }
 
@@ -165,8 +165,8 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 	var thr []Threshold
 	allPass := true
 	for _, gc := range scenario.GatedTiers() {
-		pct := groupPct(tiers, gc.Tiers)
-		pass := pct >= gc.Threshold
+		pct := groupPct(tiers, gc.LegacyTiers)
+		pass := float64(pct) >= gc.Threshold
 		if !pass {
 			allPass = false
 		}

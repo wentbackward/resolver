@@ -19,7 +19,7 @@ import (
 func TestIngestIdempotency(t *testing.T) {
 	reportsDir := t.TempDir()
 	runDir := filepath.Join(reportsDir, "fixture", "virt")
-	writeRun(t, runDir, v2Manifest("run-idem-001", "1"), v2Sidecar())
+	writeRun(t, runDir, v3Manifest("run-idem-001", "agentic-toolcall"), v2Sidecar())
 
 	communityYAML := `entries:
   - model: FixtureOrg/FixtureModel

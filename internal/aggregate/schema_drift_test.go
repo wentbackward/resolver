@@ -45,7 +45,7 @@ func TestViewColumnsStable(t *testing.T) {
 	}
 	defer db.Close()
 
-	views := []string{"run_summary", "comparison"}
+	views := []string{"run_summary", "comparison", "role_coverage"}
 	var got strings.Builder
 	for i, v := range views {
 		if i > 0 {

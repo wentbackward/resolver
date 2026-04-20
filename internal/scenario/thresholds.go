@@ -43,17 +43,27 @@ func parseGateThresholds(raw []byte) ([]GatedCheck, error) {
 	if len(f.Thresholds) == 0 {
 		return nil, fmt.Errorf("thresholds yaml has no entries")
 	}
-	// Validation: each check needs a non-empty label, ≥1 tier, and a
-	// threshold in [0, 100].
+	// Validation: each check must identify itself via role (v2.1) or label+tiers (legacy).
+	// Metric-based roles (reducer-*) use threshold in [0, 1.0]; others use [0, 100].
 	for i, g := range f.Thresholds {
-		if g.Label == "" {
-			return nil, fmt.Errorf("threshold %d: label is required", i)
+		id := g.Role
+		if id == "" {
+			id = g.Label
 		}
-		if len(g.Tiers) == 0 {
-			return nil, fmt.Errorf("threshold %d (%s): tiers list is empty", i, g.Label)
+		if g.Role == "" && g.Label == "" {
+			return nil, fmt.Errorf("threshold %d: role or label is required", i)
 		}
-		if g.Threshold < 0 || g.Threshold > 100 {
-			return nil, fmt.Errorf("threshold %d (%s): threshold %d outside [0,100]", i, g.Label, g.Threshold)
+		if g.Role == "" && len(g.LegacyTiers) == 0 {
+			return nil, fmt.Errorf("threshold %d (%s): legacy entry requires non-empty tiers list", i, id)
+		}
+		if g.Metric != "" {
+			if g.Threshold < 0 || g.Threshold > 1.0 {
+				return nil, fmt.Errorf("threshold %d (%s): metric threshold %.4g outside [0,1]", i, id, g.Threshold)
+			}
+		} else {
+			if g.Threshold < 0 || g.Threshold > 100 {
+				return nil, fmt.Errorf("threshold %d (%s): threshold %.4g outside [0,100]", i, id, g.Threshold)
+			}
 		}
 	}
 	return f.Thresholds, nil

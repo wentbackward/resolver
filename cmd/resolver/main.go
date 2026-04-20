@@ -934,7 +934,7 @@ func printScorecard(w *os.File, sc report.Scorecard) {
 		if th.Pass {
 			status = "PASS"
 		}
-		fmt.Fprintf(w, "  [%s]  %s  (pct=%d, threshold=%d)\n", status, th.Label, th.Pct, th.Threshold)
+		fmt.Fprintf(w, "  [%s]  %s  (pct=%d, threshold=%g)\n", status, th.Label, th.Pct, th.Threshold)
 	}
 	fmt.Fprintf(w, "\n  OVERALL: %s\n", sc.Summary.Overall)
 	fmt.Fprintf(w, "  timing:  total=%dms avg=%dms p50=%dms p95=%dms max=%dms count=%d\n",

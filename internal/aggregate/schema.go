@@ -2,10 +2,16 @@
 
 package aggregate
 
-// schemaVersion tracks breaking changes to the DuckDB schema. v2 aggregator
-// ships at schemaVersion=1. Bump and add a migration in migrate() below
-// when the shape needs to change.
-const schemaVersion = 1
+// schemaVersion tracks breaking changes to the DuckDB schema.
+//
+//	v1: initial v2-plan shape (runs, queries, run_config, sweep_rows,
+//	    community_benchmarks) with tier-keyed verdicts.
+//	v2: v2.1 role-organised shape. Adds role_scorecards + role_coverage
+//	    view; drops `overall` from the canonical views (still present on
+//	    `runs` for archival readers, but NULL on v2.1 rows). Aggregator
+//	    ingests only manifestVersion == 3; v1/v2 manifests are rejected
+//	    with ErrUnsupportedSchema.
+const schemaVersion = 2
 
 // ddl holds the CREATE statements. Run at first-open; idempotent. Keep
 // declarations conservative — `run_config` carries mostly nullable
@@ -117,6 +123,23 @@ var ddl = []string{
 		notes                      VARCHAR
 	)`,
 
+	// role_scorecards: one row per (run_id, role). Threshold columns
+	// capture the gate decision at aggregate time; scenario_count_*
+	// pair expected/observed so Phase 8's partial-capture sanity gate
+	// (Architect #9) can emit `verdict = "error"` when they diverge
+	// without losing the raw counts.
+	`CREATE TABLE IF NOT EXISTS role_scorecards (
+		run_id                    VARCHAR NOT NULL,
+		role                      VARCHAR NOT NULL,
+		verdict                   VARCHAR,
+		threshold_met             BOOLEAN,
+		threshold                 DOUBLE,
+		metrics_json              VARCHAR,
+		scenario_count_expected   INTEGER,
+		scenario_count_observed   INTEGER,
+		PRIMARY KEY (run_id, role)
+	)`,
+
 	// community_benchmarks: truncate-and-reloaded from YAML on every
 	// aggregate. The YAML itself is append-only; this table is a derived
 	// mirror per v2 plan.
@@ -137,11 +160,15 @@ var ddl = []string{
 }
 
 // viewDDL is re-created on every open so schema evolution doesn't leave
-// stale view definitions.
+// stale view definitions. v2.1 drops `overall` from these views — the
+// canonical verdict lives in role_scorecards, one row per (run_id, role).
+// `overall` stays on the runs table for archival readers but is no longer
+// surfaced here. The Python analyzer must read role_scorecards going
+// forward.
 var viewDDL = []string{
 	`CREATE OR REPLACE VIEW comparison AS
 	 SELECT
-	   r.run_id, r.tier, r.model, r.resolved_real_model, r.overall,
+	   r.run_id, r.model, r.resolved_real_model,
 	   r.total_ms AS run_total_ms,
 	   q.scenario_id, q.score, q.elapsed_ms,
 	   c.real_model                 AS cfg_real_model,
@@ -157,11 +184,23 @@ var viewDDL = []string{
 
 	`CREATE OR REPLACE VIEW run_summary AS
 	 SELECT
-	   r.run_id, r.model, r.resolved_real_model, r.overall,
+	   r.run_id, r.model, r.resolved_real_model,
 	   r.correct_count, r.partial_count, r.incorrect_count, r.error_count,
 	   r.query_count, r.total_ms, r.p95_ms,
 	   c.real_model AS cfg_real_model, c.default_enable_thinking AS cfg_thinking,
 	   c.tool_parser, c.mtp, c.context_size, c.quantization
 	 FROM runs r
 	 LEFT JOIN run_config c ON c.run_id = r.run_id`,
+
+	// role_coverage: one row per (run_id, role). Joins runs → role_scorecards
+	// so the notebook heat-map and reproducibility drill-down can pivot
+	// on (model × role) without repeating the join in every query.
+	`CREATE OR REPLACE VIEW role_coverage AS
+	 SELECT
+	   r.run_id, r.model, r.resolved_real_model,
+	   rs.role, rs.verdict, rs.threshold_met, rs.threshold,
+	   rs.scenario_count_expected, rs.scenario_count_observed,
+	   rs.metrics_json
+	 FROM runs r
+	 JOIN role_scorecards rs ON rs.run_id = r.run_id`,
 }

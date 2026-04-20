@@ -13,9 +13,14 @@ import (
 	"github.com/wentbackward/resolver/internal/aggregate"
 )
 
-// scoreCardFixture is a minimal spec-§7-shaped scorecard good enough for
-// ingest round-trip testing. Keeps us from depending on the report package
+// scoreCardFixture is a minimal v2.1 scorecard good enough for ingest
+// round-trip testing. Keeps us from depending on the report package
 // (would drag adapter/runner behind the build tag).
+//
+// Carries BOTH summary.tiers (tier-keyed, preserved during migration) and
+// summary.roles (role-keyed, what v2.1 ingest reads preferentially). The
+// two counter blocks are intentionally consistent so the run-level
+// totals (correct/partial/...) come out the same either way.
 const scoreCardFixture = `{
   "meta": {
     "model": "gresh-test",
@@ -25,18 +30,22 @@ const scoreCardFixture = `{
     "nodeVersion": "go1.24.0"
   },
   "summary": {
-    "overall": "PASS",
-    "thresholds": [
-      { "label": "T1+T2 > 90%", "pct": 100, "threshold": 90, "pass": true }
-    ],
-    "tiers": {
-      "T1": { "correct": 2, "partial": 0, "incorrect": 0, "errors": 0, "total": 2, "pct": 100, "avgMs": 100, "p50Ms": 100 }
+    "roles": {
+      "agentic-toolcall": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 0.9,
+        "metrics": {"pct": 1.0},
+        "scenarioCountExpected": 2,
+        "scenarioCountObserved": 2,
+        "correct": 2, "partial": 0, "incorrect": 0, "errors": 0, "total": 2
+      }
     },
     "timing": { "totalMs": 200, "avgMs": 100, "p50Ms": 100, "p95Ms": 100, "maxMs": 100, "count": 2 }
   },
   "results": [
-    { "tier": "T1", "id": "T1.1", "query": "q1", "expectedTool": "exec", "score": "correct", "reason": "", "elapsedMs": 100, "toolCalls": [], "content": null },
-    { "tier": "T1", "id": "T1.2", "query": "q2", "expectedTool": "exec", "score": "correct", "reason": "", "elapsedMs": 100, "toolCalls": [], "content": null }
+    { "role": "agentic-toolcall", "id": "R1.1", "query": "q1", "expectedTool": "exec", "score": "correct", "reason": "", "elapsedMs": 100, "toolCalls": [], "content": null },
+    { "role": "agentic-toolcall", "id": "R1.2", "query": "q2", "expectedTool": "exec", "score": "correct", "reason": "", "elapsedMs": 100, "toolCalls": [], "content": null }
   ]
 }`
 
@@ -71,7 +80,7 @@ func writeRun(t *testing.T, dir string, manifestJSON string, runConfigYAML strin
 func TestIngestIdempotent(t *testing.T) {
 	reportsDir := t.TempDir()
 	runDir := filepath.Join(reportsDir, "model-A", "virt-A")
-	writeRun(t, runDir, v2Manifest("run-001", "1"), v2Sidecar())
+	writeRun(t, runDir, v3Manifest("run-001", "agentic-toolcall"), v2Sidecar())
 
 	dbPath := filepath.Join(t.TempDir(), "r.duckdb")
 	opts := aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath}
@@ -104,33 +113,49 @@ func TestIngestIdempotent(t *testing.T) {
 	}
 }
 
-func TestIngestV1ManifestCompat(t *testing.T) {
-	// A v1-shaped manifest (manifestVersion=1, no runConfig field) must
-	// ingest without error and must NOT contribute a run_config row.
+// TestIngest_RejectsV1 + TestIngest_RejectsV2 lock the v2.1 forward-only
+// policy: pre-v3 manifests discovered under the walk roots are skipped
+// with ErrUnsupportedSchema surfaced to stderr. The aggregator continues
+// past the bad run rather than aborting the whole sweep — that way a
+// mixed research/ tree (forbidden, but possible mid-migration) doesn't
+// lose the good runs.
+func TestIngest_RejectsV1(t *testing.T) {
 	reportsDir := t.TempDir()
 	runDir := filepath.Join(reportsDir, "model-B", "virt-B")
 	writeRun(t, runDir, v1Manifest("run-v1-001"), "")
 
 	dbPath := filepath.Join(t.TempDir(), "r.duckdb")
 	if err := aggregate.Run(aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath}); err != nil {
-		t.Fatalf("ingest: %v", err)
+		t.Fatalf("aggregate.Run returned hard error; want soft skip: %v", err)
 	}
 	c := countRows(t, dbPath)
-	if c["runs"] != 1 {
-		t.Errorf("runs: got %d, want 1", c["runs"])
+	if c["runs"] != 0 {
+		t.Errorf("v1 manifest must NOT contribute a runs row; got %d", c["runs"])
 	}
-	if c["run_config"] != 0 {
-		t.Errorf("run_config: got %d, want 0 (v1 manifest, no sidecar)", c["run_config"])
+}
+
+func TestIngest_RejectsV2(t *testing.T) {
+	reportsDir := t.TempDir()
+	runDir := filepath.Join(reportsDir, "model-C", "virt-C")
+	writeRun(t, runDir, v2Manifest("run-v2-001", "1"), v2Sidecar())
+
+	dbPath := filepath.Join(t.TempDir(), "r.duckdb")
+	if err := aggregate.Run(aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath}); err != nil {
+		t.Fatalf("aggregate.Run returned hard error; want soft skip: %v", err)
 	}
-	if c["queries"] != 2 {
-		t.Errorf("queries: got %d, want 2", c["queries"])
+	c := countRows(t, dbPath)
+	if c["runs"] != 0 {
+		t.Errorf("v2 manifest must NOT contribute a runs row; got %d", c["runs"])
+	}
+	if c["role_scorecards"] != 0 {
+		t.Errorf("v2 manifest must NOT contribute role_scorecards rows; got %d", c["role_scorecards"])
 	}
 }
 
 func TestIngestDryRun(t *testing.T) {
 	reportsDir := t.TempDir()
 	runDir := filepath.Join(reportsDir, "m", "v")
-	writeRun(t, runDir, v2Manifest("run-dry-001", "1"), v2Sidecar())
+	writeRun(t, runDir, v3Manifest("run-dry-001", "agentic-toolcall"), v2Sidecar())
 
 	dbPath := filepath.Join(t.TempDir(), "r.duckdb")
 	err := aggregate.Run(aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath, DryRun: true})
@@ -176,7 +201,7 @@ entries:
 func TestIngestComparisonView(t *testing.T) {
 	reportsDir := t.TempDir()
 	runDir := filepath.Join(reportsDir, "model-A", "virt-A")
-	writeRun(t, runDir, v2Manifest("run-view-001", "1"), v2Sidecar())
+	writeRun(t, runDir, v3Manifest("run-view-001", "agentic-toolcall"), v2Sidecar())
 
 	dbPath := filepath.Join(t.TempDir(), "r.duckdb")
 	if err := aggregate.Run(aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath}); err != nil {
@@ -206,7 +231,7 @@ func countRows(t *testing.T, dbPath string) map[string]int {
 	}
 	defer db.Close()
 	out := map[string]int{}
-	for _, tbl := range []string{"runs", "queries", "sweep_rows", "run_config", "community_benchmarks"} {
+	for _, tbl := range []string{"runs", "queries", "sweep_rows", "run_config", "role_scorecards", "community_benchmarks"} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM ` + tbl).Scan(&n); err != nil {
 			t.Fatalf("count %s: %v", tbl, err)
@@ -214,6 +239,28 @@ func countRows(t *testing.T, dbPath string) map[string]int {
 		out[tbl] = n
 	}
 	return out
+}
+
+// v3Manifest is the v2.1 manifest shape — manifestVersion 3 with a
+// non-empty `role` and no `tier`. This is the only shape the aggregator
+// accepts; v1 and v2 are kept for rejection tests only.
+func v3Manifest(runID, role string) string {
+	return `{
+  "manifestVersion": 3,
+  "runId": "` + runID + `",
+  "model": "gresh-test",
+  "resolvedRealModel": "TestOrg/TestModel",
+  "adapter": "openai-chat",
+  "tokenizerMode": "heuristic",
+  "endpoint": "http://test/v1/chat/completions",
+  "role": "` + role + `",
+  "parallel": false,
+  "scenarioHashes": {},
+  "startedAt": "2026-04-19T00:00:00Z",
+  "finishedAt": "2026-04-19T00:00:30Z",
+  "goVersion": "go1.24.0",
+  "commitSha": "abc"
+}`
 }
 
 func v2Manifest(runID, tier string) string {

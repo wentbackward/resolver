@@ -30,14 +30,14 @@ func TestE2EProvenance(t *testing.T) {
 	// here is a field the aggregator won't surface to the analyzer.
 	const runID = "e2e-provenance-001"
 	manifestJSON := `{
-  "manifestVersion": 2,
+  "manifestVersion": 3,
   "runId": "` + runID + `",
   "model": "gresh-general",
   "resolvedRealModel": "Qwen/Qwen3.6-35B-A3B-FP8",
   "adapter": "openai-chat",
   "tokenizerMode": "heuristic",
   "endpoint": "http://localhost:4000/v1/chat/completions",
-  "tier": "1",
+  "role": "agentic-toolcall",
   "parallel": false,
   "scenarioHashes": {"T1.1":"abc"},
   "startedAt":  "2026-04-19T00:00:00Z",
