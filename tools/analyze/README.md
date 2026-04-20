@@ -5,6 +5,12 @@ the DuckDB file produced by `resolver aggregate` (tagged build),
 optionally joins the community-benchmarks YAML, and asks a reporter LLM
 to author an opinionated Markdown report comparing the models.
 
+For most users the one-command entry point is [`scripts/report.sh`](../../scripts/report.sh)
+at the repo root — venv + build + aggregate + Jupyter in a single
+command. See the [top-level README](../../README.md#v2-comparing-models)
+for usage and the SSH-tunnel recipe. The sections below cover the raw
+CLI for power users and scripting.
+
 **Principle #3 of the [v2 plan](../../.omc/plans/resolver-v2-plan.md):**
 Go produces, Python consumes. This package never writes under
 `reports/` — all analyzer output lives under `tools/analyze/out/`.

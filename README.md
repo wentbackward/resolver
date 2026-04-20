@@ -182,19 +182,61 @@ scorecard. All v2 additions are _additive_ — v1 scorecards still run,
 still pass `TestGoldenReplay`, and still ingest cleanly into the
 aggregator.
 
+### One-command reports
+
 ```bash
-# Ingest every scorecard + manifest + run-config under reports/ and
-# research/captures/ into a single DuckDB file:
-go build -tags duckdb -o resolver ./cmd/resolver   # CGO, first time only
-./resolver aggregate
+scripts/report.sh
+```
 
-# Ad-hoc SQL:
-duckdb reports/resolver.duckdb "SELECT model, overall, correct_count FROM runs"
+On first run (~30 s) this sets up a repo-local Python venv, builds
+`resolver -tags duckdb`, aggregates everything under `reports/` and
+`research/captures/` into a single DuckDB file, seeds your personal
+notebook workspace from the tracked templates, and launches Jupyter.
+Subsequent runs are near-instant except for the aggregate step.
 
-# LLM-authored Markdown comparison report:
-pip install -e 'tools/analyze[test]'
-analyze report                    # full pipeline via llm-proxy
-analyze report --dry-run          # prompt + data to stdout, no LLM call
+Open `quickstart.ipynb` → **Kernel → Restart & Run All** to see
+`run_summary`, `comparison`, and `community_benchmarks` rendered as
+DataFrames from raw DuckDB SQL. `con` is the read-only connection —
+edit any cell or add your own query.
+
+All ephemera — venv, binary, your notebook workspace — live under
+`.reporting/` (gitignored). `rm -rf .reporting/` to reset; the next
+run recreates it.
+
+**Flags**: `--no-launch` (setup only, skip Jupyter), `--refresh`
+(rebuild binary + re-aggregate even if cached).
+
+**Prerequisites**: [uv](https://github.com/astral-sh/uv) and Go 1.22+.
+
+### Running on a remote host
+
+If the resolver checkout lives on a different machine, SSH-forward the
+Jupyter port so the notebook server (bound to `localhost`) is reachable
+from your local browser:
+
+```bash
+# On your laptop:
+ssh -L 8888:localhost:8888 remote-host
+
+# On the remote shell that opens:
+cd ~/path/to/resolver
+scripts/report.sh
+```
+
+Paste the `http://localhost:8888/?token=...` URL Jupyter prints into
+your local browser. `Ctrl-C` in the SSH session stops both Jupyter and
+the tunnel.
+
+### Power-user shortcuts
+
+```bash
+# Direct DuckDB CLI:
+duckdb reports/resolver.duckdb "SELECT model, overall, correct_count FROM run_summary"
+
+# LLM-authored Markdown comparison report (POSTs to the reporter LLM):
+pip install -e 'tools/analyze[notebook,test]'
+analyze report
+analyze report --dry-run          # prompt + data to stdout, no network
 ```
 
 Key artefacts:
