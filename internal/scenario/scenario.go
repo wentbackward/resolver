@@ -31,6 +31,47 @@ func AllTiers() []Tier {
 	return []Tier{TierT1, TierT2, TierT3, TierT4, TierT5, TierT6, TierT7, TierT8, TierT9, TierT10}
 }
 
+// Role identifies which v2.1 role-organised bucket a scenario belongs to.
+// Roles supersede Tier for v2.1 aggregation; the on-disk layout is
+// cmd/resolver/data/roles/<role>/*.yaml and each scenario's `role` must
+// match its parent directory.
+type Role string
+
+const (
+	RoleAgenticToolcall    Role = "agentic-toolcall"
+	RoleSafetyRefuse       Role = "safety-refuse"
+	RoleSafetyEscalate     Role = "safety-escalate"
+	RoleHealthCheck        Role = "health-check"
+	RoleNodeResolution     Role = "node-resolution"
+	RoleDepReasoning       Role = "dep-reasoning"
+	RoleHITL               Role = "hitl"
+	RoleMultiturn          Role = "multiturn"
+	RoleToolCountSurvival  Role = "tool-count-survival"
+	RoleLongContext        Role = "long-context"
+	RoleReducerJSON        Role = "reducer-json"
+	RoleReducerSexp        Role = "reducer-sexp"
+	RoleClassifier         Role = "classifier"
+)
+
+// AllRoles returns the v2.1 role ids in canonical order.
+func AllRoles() []Role {
+	return []Role{
+		RoleAgenticToolcall,
+		RoleSafetyRefuse,
+		RoleSafetyEscalate,
+		RoleHealthCheck,
+		RoleNodeResolution,
+		RoleDepReasoning,
+		RoleHITL,
+		RoleMultiturn,
+		RoleToolCountSurvival,
+		RoleLongContext,
+		RoleReducerJSON,
+		RoleReducerSexp,
+		RoleClassifier,
+	}
+}
+
 // GatedTiers returns the gated check labels in scorecard order.
 // Defaults match RESOLVER-VALIDATION-SPEC.md §7 exactly — the spec and
 // Node reference both render the gates as "X > N%" even though the
@@ -65,7 +106,8 @@ type GatedCheck struct {
 // empty — it's a single-turn form by virtue of only having Query + Rule.
 type Scenario struct {
 	ID           string `yaml:"id"`
-	Tier         Tier   `yaml:"tier"`
+	Tier         Tier   `yaml:"tier,omitempty"`
+	Role         Role   `yaml:"role,omitempty"`
 	ExpectedTool string `yaml:"expected_tool,omitempty"`
 
 	// Tier 1: single-turn query.
@@ -223,8 +265,11 @@ func (s *Scenario) Validate() error {
 	if s.ID == "" {
 		return fmt.Errorf("scenario missing id")
 	}
-	if s.Tier == "" {
-		return fmt.Errorf("scenario %s missing tier", s.ID)
+	if s.Tier != "" && s.Role != "" {
+		return fmt.Errorf("scenario %s must declare either tier or role, not both", s.ID)
+	}
+	if s.Tier == "" && s.Role == "" {
+		return fmt.Errorf("scenario %s missing tier or role", s.ID)
 	}
 	if s.Query == "" && len(s.Turns) == 0 {
 		return fmt.Errorf("scenario %s has neither query nor turns", s.ID)

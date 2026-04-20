@@ -40,6 +40,7 @@ type File struct {
 
 type sharedDefaults struct {
 	Tier                 Tier      `yaml:"tier,omitempty"`
+	Role                 Role      `yaml:"role,omitempty"`
 	AvailableTools       []ToolDef `yaml:"available_tools,omitempty"`
 	ContextGrowthProfile string    `yaml:"context_growth_profile,omitempty"`
 }
@@ -60,6 +61,9 @@ func LoadFile(path string) ([]Scenario, error) {
 		s := f.Scenarios[i]
 		if s.Tier == "" {
 			s.Tier = f.Shared.Tier
+		}
+		if s.Role == "" {
+			s.Role = f.Shared.Role
 		}
 		if len(s.AvailableTools) == 0 && len(f.Shared.AvailableTools) > 0 {
 			s.AvailableTools = f.Shared.AvailableTools
