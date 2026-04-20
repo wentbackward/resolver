@@ -27,7 +27,7 @@ import httpx
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from openai import OpenAI
 
-from .db import Store, CommunityRow, RunSummary, TierPct, VarianceRow
+from .db import Store, CommunityRow, RoleSummary, RunSummary, TierPct, VarianceRow
 
 
 DEFAULT_REPORTER_MODEL = "gresh-general"
@@ -54,6 +54,7 @@ def gather_context(store: Store) -> tuple[dict, list]:
     self_eval_guard without a second DB round-trip. Dataclasses are converted
     to dicts so the Jinja template can use attribute-style access either way."""
     runs = store.run_summaries()
+    roles = store.role_summaries()
     tiers = store.tier_pcts()
     variance = store.variance()
     real_models = sorted({r.resolved_real_model or r.model for r in runs})
@@ -62,6 +63,7 @@ def gather_context(store: Store) -> tuple[dict, list]:
     ctx = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "runs": [asdict(r) for r in runs],
+        "role_summaries": [asdict(r) for r in roles],
         "tier_pcts": [asdict(t) for t in tiers],
         "variance": [asdict(v) for v in variance],
         "community_benchmarks": [asdict(c) for c in community],
@@ -83,12 +85,24 @@ def summarize_data(ctx: dict) -> str:
 
     if ctx["runs"]:
         lines.append("### Runs\n")
-        lines.append("| run_id | model | real_model | overall | thinking | tool_parser | total |")
-        lines.append("|---|---|---|---|---|---|---|")
+        lines.append("| run_id | model | real_model | thinking | tool_parser | total |")
+        lines.append("|---|---|---|---|---|---|")
         for r in ctx["runs"][:50]:
             lines.append(
                 f"| {r['run_id']} | {r['model']} | {r['cfg_real_model'] or r['resolved_real_model'] or '-'} "
-                f"| {r['overall']} | {r['cfg_thinking']} | {r['tool_parser'] or '-'} | {r['total']} |"
+                f"| {r['cfg_thinking']} | {r['tool_parser'] or '-'} | {r['total']} |"
+            )
+        lines.append("")
+
+    if ctx.get("role_summaries"):
+        lines.append("### Role verdicts\n")
+        lines.append("| run_id | role | verdict | threshold_met | threshold | expected | observed |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for r in ctx["role_summaries"][:100]:
+            lines.append(
+                f"| {r['run_id']} | {r['role']} | {r['verdict'] or '-'} "
+                f"| {r['threshold_met']} | {r['threshold']} "
+                f"| {r['scenario_count_expected']} | {r['scenario_count_observed']} |"
             )
         lines.append("")
 

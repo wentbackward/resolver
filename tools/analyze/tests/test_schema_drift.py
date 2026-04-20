@@ -31,7 +31,6 @@ RUN_SUMMARY_EXPECTED = [
     "run_id",
     "model",
     "resolved_real_model",
-    "overall",
     "correct_count",
     "partial_count",
     "incorrect_count",
@@ -52,13 +51,11 @@ RUN_SUMMARY_EXPECTED = [
 # view exists in schema.go and downstream analyzers / notebooks rely on
 # these columns. A change here signals coordination required with the
 # Go side — the golden file in `golden/view_columns.txt` is the
-# authoritative snapshot.
+# authoritative snapshot. v2.1 dropped `overall` and `tier` from this view.
 COMPARISON_EXPECTED = [
     "run_id",
-    "tier",
     "model",
     "resolved_real_model",
-    "overall",
     "run_total_ms",
     "scenario_id",
     "score",
@@ -70,6 +67,22 @@ COMPARISON_EXPECTED = [
     "cfg_mtp",
     "cfg_context_size",
     "cfg_quantization",
+]
+
+
+# Columns `db.py::role_summaries` SELECTs from the v2.1 `role_coverage`
+# view. Keep in sync with internal/aggregate/schema.go's viewDDL.
+ROLE_COVERAGE_EXPECTED = [
+    "run_id",
+    "model",
+    "resolved_real_model",
+    "role",
+    "verdict",
+    "threshold_met",
+    "threshold",
+    "scenario_count_expected",
+    "scenario_count_observed",
+    "metrics_json",
 ]
 
 
@@ -113,10 +126,11 @@ def test_comparison_has_expected_columns(seeded_db):
     try:
         # Minimal DDL for a `comparison` view that mirrors
         # internal/aggregate/schema.go. Kept in sync via the Go golden.
+        # v2.1 dropped `overall` and `tier` from this view.
         conn.execute(
             """CREATE TABLE runs (
-                run_id VARCHAR, tier VARCHAR, model VARCHAR,
-                resolved_real_model VARCHAR, overall VARCHAR,
+                run_id VARCHAR, model VARCHAR,
+                resolved_real_model VARCHAR,
                 total_ms BIGINT
             )"""
         )
@@ -137,7 +151,7 @@ def test_comparison_has_expected_columns(seeded_db):
         conn.execute(
             """CREATE VIEW comparison AS
              SELECT
-               r.run_id, r.tier, r.model, r.resolved_real_model, r.overall,
+               r.run_id, r.model, r.resolved_real_model,
                r.total_ms AS run_total_ms,
                q.scenario_id, q.score, q.elapsed_ms,
                c.real_model                 AS cfg_real_model,
@@ -165,9 +179,9 @@ def test_comparison_has_expected_columns(seeded_db):
 
 def test_run_summary_columns_match_dataclass_fields(seeded_db):
     """Cross-check: the tuple unpack in `Store.run_summaries` uses
-    positional indexing `r[0..16]`. If the SELECT column order drifts
-    out of sync with the dataclass field order, rows get scrambled
-    silently. This test pins the SELECT order to match the dataclass.
+    positional indexing. If the SELECT column order drifts out of sync
+    with the dataclass field order, rows get scrambled silently. This
+    test pins the SELECT order to match the dataclass.
     """
     from analyze.db import RunSummary
 
@@ -179,7 +193,6 @@ def test_run_summary_columns_match_dataclass_fields(seeded_db):
         "run_id": "run_id",
         "model": "model",
         "resolved_real_model": "resolved_real_model",
-        "overall": "overall",
         "correct_count": "correct",
         "partial_count": "partial",
         "incorrect_count": "incorrect",
@@ -198,4 +211,21 @@ def test_run_summary_columns_match_dataclass_fields(seeded_db):
     assert mapped == dataclass_fields, (
         f"RUN_SUMMARY_EXPECTED positional order doesn't match RunSummary "
         f"dataclass field order.\n  mapped: {mapped}\n  fields: {dataclass_fields}"
+    )
+
+
+def test_role_coverage_has_python_referenced_columns(seeded_db):
+    """Every column `db.py::role_summaries` SELECTs must exist on the
+    v2.1 `role_coverage` view."""
+    conn = duckdb.connect(str(seeded_db), read_only=True)
+    try:
+        actual = _view_columns(conn, "role_coverage")
+    finally:
+        conn.close()
+
+    missing = [c for c in ROLE_COVERAGE_EXPECTED if c not in actual]
+    assert not missing, (
+        f"role_coverage view is missing columns referenced by Python db.py: "
+        f"{missing!r}. Either the Go schema drifted or the Python code was "
+        f"edited without updating the view. Actual columns: {actual!r}."
     )

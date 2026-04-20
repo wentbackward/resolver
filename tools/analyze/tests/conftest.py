@@ -55,17 +55,39 @@ SCHEMA_DDL = [
         value DOUBLE, source_url VARCHAR, as_of DATE, notes VARCHAR,
         PRIMARY KEY (model, benchmark, metric)
     )""",
+    # v2.1 role-organised scorecard rollup. One row per (run_id, role).
+    """CREATE TABLE role_scorecards (
+        run_id                    VARCHAR NOT NULL,
+        role                      VARCHAR NOT NULL,
+        verdict                   VARCHAR,
+        threshold_met             BOOLEAN,
+        threshold                 DOUBLE,
+        metrics_json              VARCHAR,
+        scenario_count_expected   INTEGER,
+        scenario_count_observed   INTEGER,
+        PRIMARY KEY (run_id, role)
+    )""",
     # Mirrors internal/aggregate/schema.go's run_summary view exactly so
     # the Python queries in analyze.db go through the same column names
-    # they'd see against a real aggregator-produced DuckDB.
+    # they'd see against a real aggregator-produced DuckDB. v2.1 drops the
+    # `overall` column — per-role verdicts live in `role_coverage`.
     """CREATE VIEW run_summary AS
-     SELECT r.run_id, r.model, r.resolved_real_model, r.overall,
+     SELECT r.run_id, r.model, r.resolved_real_model,
             r.correct_count, r.partial_count, r.incorrect_count, r.error_count,
             r.query_count, r.total_ms, r.p95_ms,
             c.real_model AS cfg_real_model, c.default_enable_thinking AS cfg_thinking,
             c.tool_parser, c.mtp, c.context_size, c.quantization
      FROM runs r
      LEFT JOIN run_config c ON c.run_id = r.run_id""",
+    # Mirrors internal/aggregate/schema.go's role_coverage view — one row
+    # per (run_id, role) joining runs with role_scorecards.
+    """CREATE VIEW role_coverage AS
+     SELECT r.run_id, r.model, r.resolved_real_model,
+            rs.role, rs.verdict, rs.threshold_met, rs.threshold,
+            rs.scenario_count_expected, rs.scenario_count_observed,
+            rs.metrics_json
+     FROM runs r
+     JOIN role_scorecards rs ON rs.run_id = r.run_id""",
 ]
 
 
@@ -133,6 +155,22 @@ def seeded_db(tmp_path: Path) -> Path:
                 ("Org/ModelB", "modelb", "mmlu", "5shot", 0.79, "https://example.com/mmlu", "2026-02-01", ""),
             ],
         )
+
+        # role_scorecards: 2 roles × 3 runs = 6 rows. ModelA passes both;
+        # ModelB fails safety-refuse (threshold 100%) but passes agentic.
+        conn.executemany(
+            """INSERT INTO role_scorecards (run_id, role, verdict, threshold_met,
+                 threshold, metrics_json, scenario_count_expected, scenario_count_observed)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            [
+                ("run-a1", "agentic-toolcall", "PASS", True,  90.0,  "{}", 1, 1),
+                ("run-a1", "safety-refuse",    "PASS", True,  100.0, "{}", 1, 1),
+                ("run-a2", "agentic-toolcall", "PASS", True,  90.0,  "{}", 1, 1),
+                ("run-a2", "safety-refuse",    "PASS", True,  100.0, "{}", 1, 1),
+                ("run-b1", "agentic-toolcall", "PASS", True,  90.0,  "{}", 1, 1),
+                ("run-b1", "safety-refuse",    "FAIL", False, 100.0, "{}", 1, 0),
+            ],
+        )
     finally:
         conn.close()
     return db_path
@@ -146,7 +184,7 @@ def prompt_template(tmp_path: Path) -> Path:
     p = tmp_path / "compare.md"
     p.write_text(
         "Runs: {{ n_runs }}. Models: {{ n_real_models }}. "
-        "{% for r in runs %}[{{ r.model }}={{ r.overall }}]{% endfor %}",
+        "{% for r in runs %}[{{ r.model }}]{% endfor %}",
         encoding="utf-8",
     )
     return p

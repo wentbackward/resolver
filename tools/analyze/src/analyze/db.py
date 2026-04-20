@@ -67,7 +67,6 @@ class RunSummary:
     run_id: str
     model: str
     resolved_real_model: str | None
-    overall: str
     correct: int
     partial: int
     incorrect: int
@@ -81,6 +80,27 @@ class RunSummary:
     mtp: bool | None
     context_size: int | None
     quantization: str | None
+
+
+@dataclass
+class RoleSummary:
+    """One row per (run_id, role) from the `role_coverage` view.
+
+    v2.1 replaces the monolithic `overall` verdict with per-role verdicts
+    and their gate thresholds. `metrics_json` carries role-specific derived
+    rates (e.g. parse_validity for reducer-json).
+    """
+
+    run_id: str
+    model: str
+    resolved_real_model: str | None
+    role: str
+    verdict: str | None
+    threshold_met: bool | None
+    threshold: float | None
+    scenario_count_expected: int | None
+    scenario_count_observed: int | None
+    metrics_json: str | None
 
 
 @dataclass
@@ -144,8 +164,9 @@ class Store:
 
     def run_summaries(self) -> list[RunSummary]:
         # Column names track internal/aggregate/schema.go's run_summary view.
+        # v2.1 dropped `overall` — per-role verdicts live in role_scorecards.
         rows = self.conn.execute("""
-            SELECT run_id, model, resolved_real_model, overall,
+            SELECT run_id, model, resolved_real_model,
                    correct_count, partial_count, incorrect_count, error_count,
                    query_count,
                    total_ms, p95_ms,
@@ -155,11 +176,36 @@ class Store:
         """).fetchall()
         return [
             RunSummary(
-                run_id=r[0], model=r[1], resolved_real_model=r[2], overall=r[3],
-                correct=r[4], partial=r[5], incorrect=r[6], errors=r[7], total=r[8],
-                total_ms=r[9], p95_ms=r[10],
-                cfg_real_model=r[11], cfg_thinking=r[12], tool_parser=r[13],
-                mtp=r[14], context_size=r[15], quantization=r[16],
+                run_id=r[0], model=r[1], resolved_real_model=r[2],
+                correct=r[3], partial=r[4], incorrect=r[5], errors=r[6], total=r[7],
+                total_ms=r[8], p95_ms=r[9],
+                cfg_real_model=r[10], cfg_thinking=r[11], tool_parser=r[12],
+                mtp=r[13], context_size=r[14], quantization=r[15],
+            )
+            for r in rows
+        ]
+
+    def role_summaries(self) -> list[RoleSummary]:
+        """Per-(run_id, role) rollups from the v2.1 `role_coverage` view.
+
+        Replaces the single `overall` column with one verdict per role, the
+        gate threshold that was applied, and a JSON metrics blob for roles
+        that emit derived rates (reducer-json, classifier, …).
+        """
+        rows = self.conn.execute("""
+            SELECT run_id, model, resolved_real_model, role,
+                   verdict, threshold_met, threshold,
+                   scenario_count_expected, scenario_count_observed,
+                   metrics_json
+            FROM role_coverage
+            ORDER BY resolved_real_model NULLS LAST, model, run_id, role
+        """).fetchall()
+        return [
+            RoleSummary(
+                run_id=r[0], model=r[1], resolved_real_model=r[2], role=r[3],
+                verdict=r[4], threshold_met=r[5], threshold=r[6],
+                scenario_count_expected=r[7], scenario_count_observed=r[8],
+                metrics_json=r[9],
             )
             for r in rows
         ]

@@ -11,7 +11,26 @@ def test_run_summaries_returns_rows(seeded_db):
     # Sorted by real model, so ModelA runs come before ModelB.
     assert runs[0].resolved_real_model == "Org/ModelA"
     assert runs[-1].resolved_real_model == "Org/ModelB"
-    assert runs[-1].overall == "FAIL"
+    # v2.1 dropped the `overall` column — no single monolithic verdict.
+    assert not hasattr(runs[-1], "overall")
+
+
+def test_role_summaries(seeded_db):
+    """Per-role rollups from the v2.1 role_coverage view."""
+    with Store(seeded_db) as s:
+        roles = s.role_summaries()
+    # 3 runs × 2 roles seeded = 6 rows.
+    assert len(roles) == 6
+    # ModelB's safety-refuse is FAIL; its agentic-toolcall is PASS.
+    b_refuse = [r for r in roles if r.run_id == "run-b1" and r.role == "safety-refuse"][0]
+    b_agent = [r for r in roles if r.run_id == "run-b1" and r.role == "agentic-toolcall"][0]
+    assert b_refuse.verdict == "FAIL"
+    assert b_refuse.threshold_met is False
+    assert b_refuse.threshold == 100.0
+    assert b_agent.verdict == "PASS"
+    assert b_agent.threshold_met is True
+    # Sort order is (resolved_real_model, model, run_id, role); ModelA first.
+    assert roles[0].resolved_real_model == "Org/ModelA"
 
 
 def test_tier_pcts(seeded_db):
