@@ -15,8 +15,8 @@ func ptrI(v int) *int         { return &v }
 func ptrF(v float64) *float64 { return &v }
 
 func TestSchemaVersionBumped(t *testing.T) {
-	if manifest.SchemaVersion != 2 {
-		t.Errorf("SchemaVersion = %d, want 2 per v2 plan Phase 1", manifest.SchemaVersion)
+	if manifest.SchemaVersion != 3 {
+		t.Errorf("SchemaVersion = %d, want 3 per v2.1 Phase 4", manifest.SchemaVersion)
 	}
 }
 
@@ -77,8 +77,8 @@ notes: "test sidecar"
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ManifestVersion != 2 {
-		t.Errorf("ManifestVersion on disk = %d, want 2", got.ManifestVersion)
+	if got.ManifestVersion != 3 {
+		t.Errorf("ManifestVersion on disk = %d, want 3", got.ManifestVersion)
 	}
 	if got.RunConfig == nil {
 		t.Fatal("runConfig was not serialized to disk")
@@ -139,6 +139,87 @@ func TestWithoutRunConfigOmitsField(t *testing.T) {
 	}
 	if _, present := asMap["runConfig"]; present {
 		t.Errorf("runConfig key should be omitted when nil; got full map: %v", asMap)
+	}
+}
+
+func TestManifest_V3Shape(t *testing.T) {
+	dir := t.TempDir()
+	b := manifest.NewBuilder("gresh-reasoner", "http://localhost:4000", "openai-chat", "heuristic").
+		WithRole("agentic-toolcall").
+		WithPromptRev("abc123def456")
+	path, err := b.Write(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asMap map[string]any
+	if err := json.Unmarshal(raw, &asMap); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := asMap["manifestVersion"].(float64); int(got) != 3 {
+		t.Errorf("manifestVersion: got %v, want 3", asMap["manifestVersion"])
+	}
+	if got, _ := asMap["role"].(string); got != "agentic-toolcall" {
+		t.Errorf("role: got %q, want agentic-toolcall", got)
+	}
+	if got, _ := asMap["promptRev"].(string); got != "abc123def456" {
+		t.Errorf("promptRev: got %q, want abc123def456", got)
+	}
+}
+
+func TestBuilder_WithRole_ProducesNonEmptyRole(t *testing.T) {
+	b := manifest.NewBuilder("m", "http://x", "openai-chat", "heuristic").WithRole("reducer-json")
+	got := b.Current()
+	if got.Role != "reducer-json" {
+		t.Errorf("Builder.Current().Role = %q, want reducer-json", got.Role)
+	}
+}
+
+func TestSidecar_MinPRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "run-config.yaml")
+	yamlBody := `
+real_model: Qwen/Qwen3.6-35B-A3B-FP8
+default_min_p: 0.05
+default_temperature: 0.7
+`
+	if err := os.WriteFile(src, []byte(yamlBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rc, err := manifest.LoadSidecar(src)
+	if err != nil {
+		t.Fatalf("LoadSidecar: %v", err)
+	}
+	if rc.DefaultMinP == nil || *rc.DefaultMinP != 0.05 {
+		t.Fatalf("default_min_p did not load: got %v", rc.DefaultMinP)
+	}
+
+	b := manifest.NewBuilder("gresh-reasoner", "http://localhost:4000", "openai-chat", "heuristic").
+		WithRole("agentic-toolcall").WithRunConfig(rc)
+	path, err := b.Write(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got manifest.Manifest
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.RunConfig == nil || got.RunConfig.DefaultMinP == nil || *got.RunConfig.DefaultMinP != 0.05 {
+		t.Errorf("defaultMinP did not round-trip: got %+v", got.RunConfig)
+	}
+	// JSON key is defaultMinP (camelCase) per v3 spec.
+	var asMap map[string]any
+	_ = json.Unmarshal(raw, &asMap)
+	rcMap, _ := asMap["runConfig"].(map[string]any)
+	if _, present := rcMap["defaultMinP"]; !present {
+		t.Errorf("runConfig.defaultMinP key missing in JSON: %v", rcMap)
 	}
 }
 

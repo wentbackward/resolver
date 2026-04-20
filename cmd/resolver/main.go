@@ -217,7 +217,8 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 
 	ts := time.Now().UTC()
 	tok := tokenizer.Default()
-	mb := manifest.NewBuilder(f.model, f.endpoint, ad.Name(), string(tok.Mode())).WithTier(f.tier)
+	resolvedRole := resolveScenarioRole(scenarios)
+	mb := manifest.NewBuilder(f.model, f.endpoint, ad.Name(), string(tok.Mode())).WithRole(resolvedRole)
 
 	// Optional --run-config sidecar: capture proxy + vLLM recipe metadata into
 	// the manifest alongside the scorecard. Unknown values stay unset.
@@ -516,6 +517,21 @@ func oneLine(s string) string {
 		return s[:140] + "…"
 	}
 	return s
+}
+
+// resolveScenarioRole picks the common Role across a scenario batch so
+// the manifest can stamp a single role bucket per run. Loader folds
+// `shared.role` into each Scenario.Role, so the per-scenario field is
+// the single source of truth. Returns "" when the batch predates the
+// v2.1 migration (legacy tier-only scenarios) — callers accept that
+// since WithRole omits empty values in JSON.
+func resolveScenarioRole(scenarios []scenario.Scenario) string {
+	for _, s := range scenarios {
+		if s.Role != "" {
+			return string(s.Role)
+		}
+	}
+	return ""
 }
 
 func isMultiTurn(scenarios []scenario.Scenario) bool {

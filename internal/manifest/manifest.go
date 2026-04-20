@@ -47,7 +47,12 @@ func readCapped(path string, limit int64) ([]byte, error) {
 //   v2: adds RunConfig sidecar + ResolvedRealModel wired via the
 //       ResolveRealModel probe. v1 manifests remain readable by every
 //       v2 tool (the aggregator ingests RunConfig as nullable).
-const SchemaVersion = 2
+//   v3: role-organised test suite. Adds Role + PromptRev (first 12 hex
+//       chars of sha256 over the role's composed system prompt) for
+//       reproducibility, plus RunConfig.MinP (the gresh-reasoner 0.05
+//       clamp that was unrecorded in v2). Tier stays for archival
+//       readers but is no longer written by the live harness.
+const SchemaVersion = 3
 
 // RunConfig captures the stack configuration behind a given run — both the
 // llm-proxy route (clamps, sampling defaults) and the underlying engine
@@ -68,6 +73,7 @@ type RunConfig struct {
 	DefaultTemperature      *float64 `yaml:"default_temperature,omitempty" json:"default_temperature,omitempty"`
 	DefaultTopP             *float64 `yaml:"default_top_p,omitempty" json:"default_top_p,omitempty"`
 	DefaultTopK             *int     `yaml:"default_top_k,omitempty" json:"default_top_k,omitempty"`
+	DefaultMinP             *float64 `yaml:"default_min_p,omitempty" json:"defaultMinP,omitempty"`
 	DefaultPresencePenalty  *float64 `yaml:"default_presence_penalty,omitempty" json:"default_presence_penalty,omitempty"`
 	DefaultFrequencyPenalty *float64 `yaml:"default_frequency_penalty,omitempty" json:"default_frequency_penalty,omitempty"`
 	DefaultMaxTokens        *int     `yaml:"default_max_tokens,omitempty" json:"default_max_tokens,omitempty"`
@@ -130,6 +136,8 @@ type Manifest struct {
 	TokenizerMode     string            `json:"tokenizerMode"`
 	Endpoint          string            `json:"endpoint"`
 	Tier              string            `json:"tier,omitempty"`
+	Role              string            `json:"role,omitempty"`
+	PromptRev         string            `json:"promptRev,omitempty"`
 	Sweep             string            `json:"sweep,omitempty"`
 	Seeds             []int             `json:"seeds,omitempty"`
 	Parallel          bool              `json:"parallel"`
@@ -165,8 +173,21 @@ func NewBuilder(model, endpoint, adapterName, tokenizerMode string) *Builder {
 	}}
 }
 
-// WithTier annotates which tier was run.
+// WithTier annotates which tier was run. v2.1+ runs annotate WithRole
+// instead; WithTier stays as a no-op-safe helper so archival tests and
+// legacy callers keep compiling.
 func (b *Builder) WithTier(tier string) *Builder { b.m.Tier = tier; return b }
+
+// WithRole annotates which v2.1 role bucket a run belongs to. Empty
+// strings are accepted (and omitted in JSON) so transitional runs
+// without a migrated scenario tree still serialise cleanly.
+func (b *Builder) WithRole(role string) *Builder { b.m.Role = role; return b }
+
+// WithPromptRev stamps the first 12 hex chars of sha256 over the run's
+// composed system prompt (shared preamble + role body). Empty strings
+// are accepted so callers that predate the shared-assets step still
+// work; in that case the field is omitted from JSON.
+func (b *Builder) WithPromptRev(rev string) *Builder { b.m.PromptRev = rev; return b }
 
 // WithSweep annotates which sweep was run.
 func (b *Builder) WithSweep(name string, seeds []int, parallel bool) *Builder {
