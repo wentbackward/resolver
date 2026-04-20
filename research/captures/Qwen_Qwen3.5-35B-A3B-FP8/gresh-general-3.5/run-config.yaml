@@ -6,13 +6,13 @@
 virtual_model: gresh-general-3.5
 real_model: Qwen/Qwen3.5-35B-A3B-FP8
 backend_port: 3041
-captured_at: 2026-04-19
+captured_at: 2026-04-20
 
 # Proxy route layer (from llm-proxy config.yaml)
-default_temperature: 0.7
+default_temperature: 1.0
 default_top_p: 0.95
-
-
+default_top_k: 20
+default_presence_penalty: 1.5
 
 default_max_tokens: 16384
 default_enable_thinking: true
@@ -28,7 +28,7 @@ kv_cache_dtype: fp8
 attention_backend: flashinfer
 prefix_caching: true
 enable_auto_tool_choice: true
-tool_parser: qwen3_xml
+tool_parser: qwen_coder
 reasoning_parser: qwen3
 chat_template: unsloth.jinja
 mtp: true
@@ -38,4 +38,4 @@ load_format: fastsafetensors
 quantization: fp8
 env_VLLM_MARLIN_USE_ATOMIC_ADD: "1"
 
-notes: "baseline; thinking on; generic mtp method"
+notes: "route rebalanced 2026-04-20 (temp 0.7 -> 1.0, +top_k 20, +presence_penalty 1.5); vLLM tool_parser qwen3_xml -> qwen_coder"

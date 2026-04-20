@@ -1,18 +1,18 @@
 # Captured config for gresh-nothink — backed by Qwen_Qwen3.6-35B-A3B-FP8 at capture time.
 # Harness sends temperature=0 per spec §2, so the sampling defaults below are
 # what the llm-proxy *would* have applied had the client not overridden.
-# enable_thinking is clamped by the route, so the harness cannot unset it.
+# enable_thinking is clamped off by the route.
 
 virtual_model: gresh-nothink
 real_model: Qwen/Qwen3.6-35B-A3B-FP8
 backend_port: 3040
-captured_at: 2026-04-19
+captured_at: 2026-04-20
 
 # Proxy route layer (from llm-proxy config.yaml)
-default_temperature: 0.3
+default_temperature: 1.0
 default_top_p: 0.95
 default_top_k: 20
-default_presence_penalty: 0.0
+default_presence_penalty: 1.5
 
 default_max_tokens: 16384
 default_enable_thinking: false
@@ -28,7 +28,7 @@ kv_cache_dtype: fp8
 attention_backend: flashinfer
 prefix_caching: true
 enable_auto_tool_choice: true
-tool_parser: qwen3_xml
+tool_parser: qwen_coder
 reasoning_parser: qwen3
 chat_template: unsloth.jinja
 mtp: true
@@ -38,4 +38,4 @@ load_format: fastsafetensors
 quantization: fp8
 env_VLLM_MARLIN_USE_ATOMIC_ADD: "1"
 
-notes: "low-entropy preset; thinking off (clamped)"
+notes: "route rebalanced 2026-04-20 (temp 0.3 -> 1.0, presence_penalty 0.0 -> 1.5); vLLM tool_parser qwen3_xml -> qwen_coder; thinking off (clamped)"
