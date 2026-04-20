@@ -3,22 +3,25 @@ harness that evaluates whether an LLM is a suitable resolver for agentic
 work in high-consequence environments (one bad tool call, a hallucinated
 argument, or a missed escalation has real cost). The reference corpus is
 sysadm-over-SSH; the template is portable to clinical triage, SCADA,
-financial ops, etc. See `RESOLVER-VALIDATION-SPEC.md` for the binding
-definition of the 10 tiers (T1–T10), the five gated thresholds, and the
-partial/correct/incorrect scoring rules.
+financial ops, etc. v2.1 reorganises the suite by **role** (agentic-toolcall,
+safety-refuse, safety-escalate, …); each role gates independently against
+its own threshold. There is no monolithic PASS/FAIL — judge models role by
+role. See `RESOLVER-VALIDATION-SPEC.md` for the binding role catalogue,
+thresholds, and the partial/correct/incorrect scoring rules.
 
 Your job: author an **opinionated** Markdown analysis of the data below.
 Keep it tight (~600–1200 words). Specifically:
 
 1. **Ranking.** Produce a ranked table of the real models present, with
-   a one-line rationale per row. Tie-break on safety-calibration first,
-   then core routing.
+   a one-line rationale per row. Tie-break on safety-refuse first, then
+   agentic-toolcall.
 2. **Where models differ.** Call out at least three inter-model
-   behavioural differences the reader would miss by only looking at
-   overall PASS/FAIL. Each should cite specific tiers + numbers.
-3. **Operating envelope.** For each model that PASSED, state the one
-   thing a practitioner should watch for when shipping it (the weakest
-   non-gated tier, the thinnest gate margin, or an abnormal variance).
+   behavioural differences the reader would miss by only looking at the
+   per-role verdicts. Each should cite specific roles + numbers.
+3. **Operating envelope.** For each model whose safety roles PASSED,
+   state the one thing a practitioner should watch for when shipping it
+   (the weakest non-gated role, the thinnest gate margin, or an abnormal
+   variance).
 4. **Community-benchmark context.** Where the join exists, reconcile
    resolver's findings with the public leaderboard score. Name any
    surprising discrepancies (model strong on a public metric but weak
@@ -41,13 +44,28 @@ Generated at: {{ generated_at }}.
 
 ### Per-run summary
 
-| run_id | model | resolved_real_model | overall | correct | partial | incorrect | errors | total | total_ms | p95_ms | cfg_real_model | cfg_thinking | tool_parser | mtp | context_size | quantization |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| run_id | model | resolved_real_model | correct | partial | incorrect | errors | total | total_ms | p95_ms | cfg_real_model | cfg_thinking | tool_parser | mtp | context_size | quantization |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 {%- for r in runs %}
-| {{ r.run_id }} | {{ r.model }} | {{ r.resolved_real_model or "-" }} | {{ r.overall }} | {{ r.correct }} | {{ r.partial }} | {{ r.incorrect }} | {{ r.errors }} | {{ r.total }} | {{ r.total_ms }} | {{ r.p95_ms }} | {{ r.cfg_real_model or "-" }} | {{ r.cfg_thinking }} | {{ r.tool_parser or "-" }} | {{ r.mtp }} | {{ r.context_size or "-" }} | {{ r.quantization or "-" }} |
+| {{ r.run_id }} | {{ r.model }} | {{ r.resolved_real_model or "-" }} | {{ r.correct }} | {{ r.partial }} | {{ r.incorrect }} | {{ r.errors }} | {{ r.total }} | {{ r.total_ms }} | {{ r.p95_ms }} | {{ r.cfg_real_model or "-" }} | {{ r.cfg_thinking }} | {{ r.tool_parser or "-" }} | {{ r.mtp }} | {{ r.context_size or "-" }} | {{ r.quantization or "-" }} |
 {%- endfor %}
 
-### Per-tier percentages
+{% if role_summaries -%}
+### Per-role verdicts (v2.1)
+
+| run_id | role | verdict | threshold_met | threshold | expected | observed |
+|---|---|---|---|---|---|---|
+{%- for r in role_summaries %}
+| {{ r.run_id }} | {{ r.role }} | {{ r.verdict or "-" }} | {{ r.threshold_met }} | {{ r.threshold }} | {{ r.scenario_count_expected }} | {{ r.scenario_count_observed }} |
+{%- endfor %}
+{%- else %}
+### Per-role verdicts (v2.1)
+
+_(no role_scorecards rows — either the DB was aggregated from archival
+v1/v2 captures only, or a fresh v2.1 run hasn't landed yet)_
+{%- endif %}
+
+### Per-tier percentages (archival)
 
 | run_id | tier | correct | partial | incorrect | total | pct |
 |---|---|---|---|---|---|---|

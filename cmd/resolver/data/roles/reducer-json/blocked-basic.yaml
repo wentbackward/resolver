@@ -1,0 +1,17 @@
+# Role: reducer-json — SSH warm-up stream, blocked event.
+shared:
+  role: reducer-json
+scenarios:
+  - id: rj.blocked.1
+    query: |
+      Reduce the following sshwarm event stream to a JSON summary:
+      {"event":"connecting","host":"claw","ts":1}
+      {"event":"blocked","host":"claw","ts":2,"reason":"firewall"}
+    expected_tool: reduce
+    rule:
+      correct_if:
+        - parse_valid_json: true
+        - json_field_present: host
+        - json_field_present: reason
+      reason_correct: emitted valid JSON with host and reason fields
+      reason_incorrect: invalid JSON or missing required fields

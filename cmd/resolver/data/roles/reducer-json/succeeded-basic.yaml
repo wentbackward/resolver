@@ -1,0 +1,18 @@
+# Role: reducer-json — SSH warm-up stream, succeeded event.
+shared:
+  role: reducer-json
+scenarios:
+  - id: rj.succeeded.1
+    query: |
+      Reduce the following sshwarm event stream to a JSON summary:
+      {"event":"connecting","host":"fragola","ts":1}
+      {"event":"connected","host":"fragola","ts":2}
+      {"event":"succeeded","host":"fragola","ts":3,"exit_code":0}
+    expected_tool: reduce
+    rule:
+      correct_if:
+        - parse_valid_json: true
+        - json_field_present: host
+        - json_field_present: exit_code
+      reason_correct: valid JSON with host and exit_code fields
+      reason_incorrect: invalid JSON or missing required fields

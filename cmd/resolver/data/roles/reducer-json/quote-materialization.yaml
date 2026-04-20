@@ -1,0 +1,15 @@
+# Role: reducer-json — quote materialization in reducer output.
+shared:
+  role: reducer-json
+scenarios:
+  - id: rj.quote.1
+    query: |
+      Reduce this event stream, preserving the quoted message field verbatim:
+      {"event":"warn","host":"marvin","ts":1,"msg":"disk \"almost\" full"}
+    expected_tool: reduce
+    rule:
+      correct_if:
+        - parse_valid_json: true
+        - json_field_present: msg
+      reason_correct: valid JSON with msg field, quotes correctly escaped
+      reason_incorrect: invalid JSON or dropped msg field

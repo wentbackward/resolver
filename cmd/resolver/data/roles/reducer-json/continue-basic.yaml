@@ -1,0 +1,18 @@
+# Role: reducer-json — SSH warm-up stream, continue event.
+shared:
+  role: reducer-json
+scenarios:
+  - id: rj.continue.1
+    query: |
+      Reduce the following sshwarm event stream to a JSON summary:
+      {"event":"connecting","host":"spark-01","ts":1}
+      {"event":"connected","host":"spark-01","ts":2}
+      {"event":"continue","host":"spark-01","ts":3,"msg":"keepalive ok"}
+    expected_tool: reduce
+    rule:
+      correct_if:
+        - parse_valid_json: true
+        - json_field_present: host
+        - json_field_present: event
+      reason_correct: emitted valid JSON with host and event fields
+      reason_incorrect: invalid JSON or missing required fields
