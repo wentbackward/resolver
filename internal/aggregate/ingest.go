@@ -245,23 +245,34 @@ func ingestRun(db *sql.DB, r discovered) error {
 		return fmt.Errorf("parse scorecard: %w", err)
 	}
 
+	// Clear any prior rows for this run_id BEFORE opening the transaction.
+	// DuckDB's ART index doesn't release keys deleted within a tx until
+	// commit, so a DELETE + INSERT of the same PK inside one tx fails with
+	// a duplicate-key error (https://duckdb.org/docs/sql/indexes). Running
+	// the DELETEs as auto-committed statements sidesteps that limitation
+	// and keeps re-ingestion truly idempotent.
+	for _, stmt := range []string{
+		`DELETE FROM runs WHERE run_id = ?`,
+		`DELETE FROM queries WHERE run_id = ?`,
+		`DELETE FROM run_config WHERE run_id = ?`,
+	} {
+		if _, err := db.Exec(stmt, r.runID); err != nil {
+			return err
+		}
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Upsert runs row.
 	var correct, partial, incorrect, errs int
 	for _, t := range sc.Summary.Tiers {
 		correct += t.Correct
 		partial += t.Partial
 		incorrect += t.Incorrect
 		errs += t.Errors
-	}
-	_, err = tx.Exec(`DELETE FROM runs WHERE run_id = ?`, r.runID)
-	if err != nil {
-		return err
 	}
 	_, err = tx.Exec(`INSERT INTO runs (
 		run_id, scorecard_path, manifest_path,
@@ -280,10 +291,7 @@ func ingestRun(db *sql.DB, r discovered) error {
 		return fmt.Errorf("insert runs: %w", err)
 	}
 
-	// queries: delete + reinsert (simpler than tracking per-query identity).
-	if _, err := tx.Exec(`DELETE FROM queries WHERE run_id = ?`, r.runID); err != nil {
-		return err
-	}
+	// queries: pre-DELETE happened above (outside the tx). Just insert.
 	for _, q := range sc.Results {
 		tcJSON, _ := json.Marshal(q.ToolCalls)
 		var content string
@@ -314,9 +322,7 @@ func ingestRun(db *sql.DB, r discovered) error {
 		}
 	}
 	if rc != nil {
-		if _, err := tx.Exec(`DELETE FROM run_config WHERE run_id = ?`, r.runID); err != nil {
-			return err
-		}
+		// run_config pre-DELETE happened above (outside the tx).
 		if _, err := tx.Exec(`INSERT INTO run_config (
 			run_id, virtual_model, real_model, backend, backend_port,
 			default_temperature, default_top_p, default_top_k, default_presence_penalty, default_frequency_penalty,
@@ -346,14 +352,17 @@ func ingestRun(db *sql.DB, r discovered) error {
 }
 
 func reloadCommunity(db *sql.DB, rows []CommunityBenchmark) error {
+	// DELETE outside the tx — DuckDB's ART index doesn't clear deleted
+	// keys inside a tx until commit, so DELETE + INSERT of the same PK
+	// in one tx raises a constraint error.
+	if _, err := db.Exec(`DELETE FROM community_benchmarks`); err != nil {
+		return err
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM community_benchmarks`); err != nil {
-		return err
-	}
 	for _, r := range rows {
 		if _, err := tx.Exec(`INSERT INTO community_benchmarks
 			(model, model_key, benchmark, metric, value, source_url, as_of, notes)
