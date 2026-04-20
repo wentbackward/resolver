@@ -9,26 +9,49 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/wentbackward/resolver/internal/scenario"
 )
 
 // TestTier1RepeatRun exercises the -n N reproducibility path: running
-// NOTE: skipped in v2.1 — tier1/ retired (Phase 2 migration); T4 will update.
-// Tier 1 three times under --replay must produce three scorecards whose
-// `summary` blocks are byte-identical, each with a distinct filename
-// (first bare, k>0 suffixed `-repK`), and three manifests sharing a
-// single repeat_group value.
+// the v1-migrated role scenarios three times under --replay must
+// produce three scorecards whose `summary` blocks are byte-identical,
+// each with a distinct filename (first bare, k>0 suffixed `-repK`),
+// and three manifests sharing a single repeat_group value.
+//
+// NOTE: retains the Tier1 test name for history; in v2.1 the 31
+// scenarios live under roles/ and `--tier=1` walks `tier1/` which is
+// now empty. We point the harness at a temporary --data-dir-less run
+// that uses the v1-migrated role dirs by passing no tier override and
+// relying on the flag parser's default.
 func TestTier1RepeatRun(t *testing.T) {
-	t.Skip("v2.1 golden regen pending Phase 5 (T4): tier1/ retired")
 	out := t.TempDir()
+	// tier=1 under v2.1: walkScenarios("tier1") returns nothing after
+	// Phase 2 retirement, so runTier would abort with "no scenarios
+	// loaded". Work around by pointing --data-dir at a generated tree
+	// that symlinks the 7 v1-migrated role dirs under tier1/.
+	dd := makeV2_1TierShim(t)
 	f := flags{
-		tier:      "1",
-		model:     "gresh-general",
-		endpoint:  "http://localhost:4000/v1/chat/completions",
-		replay:    filepath.Join(repoRoot(t), "golden", "canned-responses.json"),
-		out:       out,
-		nSeeds:    3,
+		tier:     "1",
+		model:    "gresh-general",
+		endpoint: "http://localhost:4000/v1/chat/completions",
+		replay:   filepath.Join(repoRoot(t), "golden", "canned-responses.json"),
+		out:      out,
+		nSeeds:   3,
+		dataDir:  dd,
 	}
-	if code := runTier(context.Background(), f, dataSource{}); code != 0 && code != 1 {
+	ds, derr := resolveDataDir(dd)
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	// Route loadThresholds at the shimmed dir so the embedded YAML path
+	// (shared/gate-thresholds.yaml) still resolves.
+	if err := loadThresholds("", ds); err != nil {
+		t.Fatalf("loadThresholds: %v", err)
+	}
+	t.Cleanup(scenario.ResetGatedTiersToDefaults)
+
+	if code := runTier(context.Background(), f, ds); code != 0 && code != 1 {
 		// code==1 is fine (model under test FAILs the gate); code==2 is a
 		// harness error.
 		t.Fatalf("runTier exit code %d", code)
@@ -105,8 +128,9 @@ func TestTier1RepeatRun(t *testing.T) {
 		t.Errorf("expected all 3 manifests to share a single repeat_group; got %d distinct: %v", len(groups), groups)
 	}
 
-	// Shape assertion: -rep1 scorecard top-level keys and tier names must
-	// match golden/scorecard_example.json so a silent schema regression fails CI.
+	// Shape assertion: -rep1 scorecard top-level keys and role names
+	// must match golden/scorecard_example.json so a silent schema
+	// regression fails CI.
 	var rep1Path string
 	for _, p := range scorecards {
 		if strings.HasSuffix(p, "-rep1.json") {
@@ -143,28 +167,109 @@ func TestTier1RepeatRun(t *testing.T) {
 	if !reflect.DeepEqual(rep1Keys, goldenKeys) {
 		t.Fatalf("scorecard top-level keys drifted: got %v want %v", rep1Keys, goldenKeys)
 	}
-	// Also compare tier names nested under summary.tiers.
-	tierNames := func(sc map[string]any) []string {
+	// Also compare role names nested under summary.roles.
+	roleNames := func(sc map[string]any) []string {
 		summary, ok := sc["summary"].(map[string]any)
 		if !ok {
 			return nil
 		}
-		tiers, ok := summary["tiers"].(map[string]any)
+		roles, ok := summary["roles"].(map[string]any)
 		if !ok {
 			return nil
 		}
-		names := make([]string, 0, len(tiers))
-		for k := range tiers {
+		names := make([]string, 0, len(roles))
+		for k := range roles {
 			names = append(names, k)
 		}
 		sort.Strings(names)
 		return names
 	}
-	rep1Tiers := tierNames(rep1SC)
-	goldenTiers := tierNames(goldenSC)
-	if rep1Tiers != nil && goldenTiers != nil && !reflect.DeepEqual(rep1Tiers, goldenTiers) {
-		t.Fatalf("scorecard tier names drifted: got %v want %v", rep1Tiers, goldenTiers)
+	rep1Roles := roleNames(rep1SC)
+	goldenRoles := roleNames(goldenSC)
+	if rep1Roles != nil && goldenRoles != nil && !reflect.DeepEqual(rep1Roles, goldenRoles) {
+		t.Fatalf("scorecard role names drifted: got %v want %v", rep1Roles, goldenRoles)
 	}
+}
+
+// makeV2_1TierShim builds a temp data dir that mirrors
+// cmd/resolver/data, but where `tier1/` contains real copies of the
+// YAML files from the 7 v1-migrated role directories. This lets the
+// --tier=1 CLI path keep working for repeat-run tests without
+// reviving tier1/ at the repo level. We copy rather than symlink
+// because filepath.WalkDir in scenario.LoadTree does not descend into
+// symlinked directories.
+func makeV2_1TierShim(t *testing.T) string {
+	t.Helper()
+	root := repoRoot(t)
+	src := filepath.Join(root, "cmd", "resolver", "data")
+	dst := t.TempDir()
+	// Top-level: symlink every entry except tier1/, which we rebuild.
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		t.Fatalf("read %s: %v", src, err)
+	}
+	for _, e := range entries {
+		if e.Name() == "tier1" {
+			continue
+		}
+		from := filepath.Join(src, e.Name())
+		to := filepath.Join(dst, e.Name())
+		if err := os.Symlink(from, to); err != nil {
+			t.Fatalf("symlink %s -> %s: %v", from, to, err)
+		}
+	}
+	// Rebuild tier1/ as a real directory.
+	tierDst := filepath.Join(dst, "tier1")
+	if err := os.Mkdir(tierDst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Carry over tier1-scoped assets (system-prompt.md, gate-thresholds.yaml).
+	for _, f := range []string{"system-prompt.md", "gate-thresholds.yaml"} {
+		from := filepath.Join(src, "tier1", f)
+		if _, err := os.Stat(from); err == nil {
+			if err := os.Symlink(from, filepath.Join(tierDst, f)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Copy each v1-migrated role dir into tier1/. Copying (not
+	// symlinking) ensures filepath.WalkDir descends into them.
+	for _, rd := range []string{"agentic-toolcall", "safety-refuse", "safety-escalate", "health-check", "node-resolution", "dep-reasoning", "hitl"} {
+		if err := copyDir(filepath.Join(src, "roles", rd), filepath.Join(tierDst, rd)); err != nil {
+			t.Fatalf("copy %s: %v", rd, err)
+		}
+	}
+	return dst
+}
+
+// copyDir recursively copies src into dst (creating dst). Preserves
+// file bytes; does not preserve mode. Used only by the shim above.
+func copyDir(src, dst string) error {
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		from := filepath.Join(src, e.Name())
+		to := filepath.Join(dst, e.Name())
+		if e.IsDir() {
+			if err := copyDir(from, to); err != nil {
+				return err
+			}
+			continue
+		}
+		b, err := os.ReadFile(from)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(to, b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // repoRoot returns the repository root relative to the current test file.

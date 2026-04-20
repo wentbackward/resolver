@@ -1,6 +1,6 @@
 # Tier T10 — Dependency-chain reasoning → graph_query.
 shared:
-  tier: T10
+  role: dep-reasoning
 scenarios:
   - id: T10.1
     query: if I restart llm-proxy, what breaks?

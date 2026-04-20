@@ -125,7 +125,7 @@ func runMain() int {
 
 // loadThresholds sets the package-level GatedTiers() override. Priority:
 //   1. `--thresholds PATH` on disk  (if supplied).
-//   2. Embedded `tier1/gate-thresholds.yaml` (always present in the binary).
+//   2. Embedded `shared/gate-thresholds.yaml` (v2.1 role-keyed defaults).
 func loadThresholds(override string, dataDir dataSource) error {
 	if override != "" {
 		checks, err := scenario.LoadGateThresholds(override)
@@ -135,7 +135,7 @@ func loadThresholds(override string, dataDir dataSource) error {
 		scenario.SetGatedTiers(checks)
 		return nil
 	}
-	raw, err := dataDir.readFile("tier1/gate-thresholds.yaml")
+	raw, err := dataDir.readFile("shared/gate-thresholds.yaml")
 	if err != nil {
 		return err
 	}
@@ -268,7 +268,7 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 		for _, s := range scenarios {
 			r := runner.RunMultiTurn(ctx, ad, &s, mt)
 			perQueries = append(perQueries, runner.PerQuery{
-				Tier: r.Tier, ID: r.ID, Query: firstUserText(&s),
+				Tier: r.Tier, Role: s.Role, ID: r.ID, Query: firstUserText(&s),
 				ExpectedTool: s.ExpectedTool, Score: r.Score, Reason: r.Reason,
 				ElapsedMs: r.ElapsedMs, ToolCalls: r.ToolCalls,
 				Content: nilIfEmpty(r.Content),
@@ -325,9 +325,16 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 		outGroup = mb.Current().RunID
 	}
 
-	exitCode := 1
-	if sc.Summary.Overall == "PASS" {
-		exitCode = 0
+	// v2.1 exit code: any gated role with Verdict == "FAIL" fails the run.
+	// INFO-verdict roles (ungated) never block the exit code. An empty
+	// Roles map (no scenarios) is treated as a harness error (code 2),
+	// but that's caught earlier by loadTier.
+	exitCode := 0
+	for _, rs := range sc.Summary.Roles {
+		if rs.Verdict == "FAIL" {
+			exitCode = 1
+			break
+		}
 	}
 	return exitCode, outGroup
 }
@@ -923,10 +930,13 @@ func verdictToAcc(s verdict.Score) float64 {
 func printScorecard(w *os.File, sc report.Scorecard) {
 	fmt.Fprintf(w, "\nResolver scorecard — %s @ %s (%s)\n", sc.Meta.Model, sc.Meta.Endpoint, sc.Meta.Timestamp)
 	fmt.Fprintln(w, strings.Repeat("-", 72))
-	for _, t := range scenario.AllTiers() {
-		ts := sc.Summary.Tiers[t]
-		fmt.Fprintf(w, "  %-4s  correct=%d partial=%d incorrect=%d errors=%d  total=%d  pct=%d%%\n",
-			t, ts.Correct, ts.Partial, ts.Incorrect, ts.Errors, ts.Total, ts.Pct)
+	for _, r := range scenario.AllRoles() {
+		rs, ok := sc.Summary.Roles[r]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(w, "  %-22s  %-4s  correct=%d partial=%d incorrect=%d errors=%d  total=%d  pct=%d%%\n",
+			r, rs.Verdict, rs.Correct, rs.Partial, rs.Incorrect, rs.Errors, rs.Total, rs.Pct)
 	}
 	fmt.Fprintln(w)
 	for _, th := range sc.Summary.Thresholds {
@@ -936,8 +946,7 @@ func printScorecard(w *os.File, sc report.Scorecard) {
 		}
 		fmt.Fprintf(w, "  [%s]  %s  (pct=%d, threshold=%g)\n", status, th.Label, th.Pct, th.Threshold)
 	}
-	fmt.Fprintf(w, "\n  OVERALL: %s\n", sc.Summary.Overall)
-	fmt.Fprintf(w, "  timing:  total=%dms avg=%dms p50=%dms p95=%dms max=%dms count=%d\n",
+	fmt.Fprintf(w, "\n  timing:  total=%dms avg=%dms p50=%dms p95=%dms max=%dms count=%d\n",
 		sc.Summary.Timing.TotalMs, sc.Summary.Timing.AvgMs, sc.Summary.Timing.P50Ms,
 		sc.Summary.Timing.P95Ms, sc.Summary.Timing.MaxMs, sc.Summary.Timing.Count)
 }

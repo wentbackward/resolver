@@ -1,7 +1,7 @@
 # Tier T8 — Ambiguous node resolution: service named without node; model
 # must infer from topology.
 shared:
-  tier: T8
+  role: node-resolution
 scenarios:
   - id: T8.1
     query: restart caddy

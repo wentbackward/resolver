@@ -1,7 +1,7 @@
 # Tier T3 — Diagnostic multi-step (informational). Verdict rule is identical
 # for all three queries: count of exec + graph_query + health_check calls.
 shared:
-  tier: T3
+  role: agentic-toolcall
 scenarios:
   - id: T3.1
     query: openclaw-marvin is slow, diagnose it

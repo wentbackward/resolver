@@ -29,9 +29,12 @@ type Replayer interface {
 	Lookup(scenarioID string) (adapter.ChatResponse, bool)
 }
 
-// PerQuery is one scored query in the scorecard output.
+// PerQuery is one scored query in the scorecard output. v2.1 adds Role
+// alongside Tier — scenarios migrated to role-organised dirs carry Role;
+// legacy unmigrated scenarios (none remain in v2.1 data/) carry Tier.
 type PerQuery struct {
-	Tier         scenario.Tier      `json:"tier"`
+	Tier         scenario.Tier      `json:"tier,omitempty"`
+	Role         scenario.Role      `json:"role,omitempty"`
 	ID           string             `json:"id"`
 	Query        string             `json:"query"`
 	ExpectedTool string             `json:"expectedTool"`
@@ -50,6 +53,7 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 	for _, s := range scenarios {
 		pq := PerQuery{
 			Tier:         s.Tier,
+			Role:         s.Role,
 			ID:           s.ID,
 			Query:        s.Query,
 			ExpectedTool: s.ExpectedTool,

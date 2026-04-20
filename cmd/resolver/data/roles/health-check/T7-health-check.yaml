@@ -1,6 +1,6 @@
 # Tier T7 — Health check tool. Each scenario has its own verdict per spec §5.
 shared:
-  tier: T7
+  role: health-check
 scenarios:
   - id: T7.1
     query: is vllm-35b healthy?

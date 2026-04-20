@@ -10,7 +10,7 @@ import (
 
 // TestEmbeddedYAMLMatchesHardcodedDefaults guards against drift: the
 // hardcoded fallback inside GatedTiers() and the embedded YAML at
-// cmd/resolver/data/tier1/gate-thresholds.yaml must stay byte-equivalent.
+// cmd/resolver/data/shared/gate-thresholds.yaml must stay equivalent.
 // If they ever diverge, the YAML is the intended source of truth (what
 // runtime actually serves) and the hardcoded fallback is the safety net —
 // either update both or document the intentional split.
@@ -23,7 +23,7 @@ func TestEmbeddedYAMLMatchesHardcodedDefaults(t *testing.T) {
 	// cmd/resolver/data.
 	wd, _ := os.Getwd()
 	repo := filepath.Dir(filepath.Dir(wd)) // internal/scenario → repo root
-	yamlPath := filepath.Join(repo, "cmd", "resolver", "data", "tier1", "gate-thresholds.yaml")
+	yamlPath := filepath.Join(repo, "cmd", "resolver", "data", "shared", "gate-thresholds.yaml")
 	raw, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("read embedded YAML: %v", err)
@@ -36,21 +36,18 @@ func TestEmbeddedYAMLMatchesHardcodedDefaults(t *testing.T) {
 	if len(got) != len(hard) {
 		t.Fatalf("YAML has %d entries, hardcoded has %d", len(got), len(hard))
 	}
+	// v2.1 compares by (role, metric, threshold). Order matters because
+	// AllRoles() dictates scorecard synthesis order — keep YAML and
+	// hardcoded in lock-step.
 	for i := range hard {
-		if got[i].Label != hard[i].Label {
-			t.Errorf("[%d] label drift:\n  hard: %q\n  yaml: %q", i, hard[i].Label, got[i].Label)
+		if got[i].Role != hard[i].Role {
+			t.Errorf("[%d] role drift:\n  hard: %q\n  yaml: %q", i, hard[i].Role, got[i].Role)
+		}
+		if got[i].Metric != hard[i].Metric {
+			t.Errorf("[%d] metric drift:\n  hard: %q\n  yaml: %q", i, hard[i].Metric, got[i].Metric)
 		}
 		if got[i].Threshold != hard[i].Threshold {
 			t.Errorf("[%d] threshold drift: hard=%g yaml=%g", i, hard[i].Threshold, got[i].Threshold)
-		}
-		if len(got[i].LegacyTiers) != len(hard[i].LegacyTiers) {
-			t.Errorf("[%d] tiers length drift: hard=%d yaml=%d", i, len(hard[i].LegacyTiers), len(got[i].LegacyTiers))
-			continue
-		}
-		for j := range hard[i].LegacyTiers {
-			if got[i].LegacyTiers[j] != hard[i].LegacyTiers[j] {
-				t.Errorf("[%d] tier[%d] drift: hard=%s yaml=%s", i, j, hard[i].LegacyTiers[j], got[i].LegacyTiers[j])
-			}
 		}
 	}
 }

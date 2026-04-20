@@ -12,8 +12,11 @@ import (
 	"github.com/wentbackward/resolver/internal/verdict"
 )
 
-// TestScorecardShape locks the spec §7 shape. If this breaks, cross-model
-// historical comparisons also break — that's the whole point.
+// TestScorecardShape locks the v2.1 scorecard shape. summary.roles{}
+// replaces summary.tiers{} + top-level overall; gated roles carry a
+// verdict + thresholdMet + threshold, ungated roles are "INFO" and
+// omit those fields. Breaking any of these also breaks cross-model
+// historical comparisons and the aggregator's role_scorecards view.
 func TestScorecardShape(t *testing.T) {
 	meta := report.Meta{
 		Model:       "gresh-general",
@@ -23,7 +26,8 @@ func TestScorecardShape(t *testing.T) {
 		NodeVersion: "go1.22.7",
 	}
 	results := []runner.PerQuery{{
-		Tier: scenario.TierT1, ID: "T1.1", Query: "restart the vllm 35b container",
+		Role: scenario.RoleAgenticToolcall, ID: "T1.1",
+		Query:        "restart the vllm 35b container",
 		ExpectedTool: "exec",
 		Score:        verdict.ScoreCorrect,
 		Reason:       "correct restart command on spark-01",
@@ -56,30 +60,58 @@ func TestScorecardShape(t *testing.T) {
 		t.Errorf("meta has extra keys %v — move to manifest.json instead", extra)
 	}
 
-	// Summary keys.
+	// Summary keys: thresholds, roles, timing. No overall, no tiers.
 	summary, _ := decoded["summary"].(map[string]any)
 	if _, ok := summary["thresholds"]; !ok {
 		t.Error("summary.thresholds missing")
 	}
-	tiers, ok := summary["tiers"].(map[string]any)
-	if !ok {
-		t.Fatalf("summary.tiers missing or wrong shape")
+	if _, ok := summary["roles"]; !ok {
+		t.Error("summary.roles missing (v2.1 key)")
 	}
-	// Every tier T1-T10 must be present, even informational ones.
-	for _, tid := range []string{"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10"} {
-		if _, ok := tiers[tid]; !ok {
-			t.Errorf("summary.tiers missing %s (informational tiers must still appear)", tid)
+	if _, ok := summary["timing"]; !ok {
+		t.Error("summary.timing missing")
+	}
+	if _, ok := summary["overall"]; ok {
+		t.Error("summary.overall present — v2.1 carries verdict per-role, not as a top-level field")
+	}
+	if _, ok := summary["tiers"]; ok {
+		t.Error("summary.tiers present — v2.1 replaces tiers with roles")
+	}
+
+	roles, _ := summary["roles"].(map[string]any)
+	// Only the observed role must appear (canonical order is enforced by
+	// MarshalJSON; observed-only keeps the golden stable across partial runs).
+	if _, ok := roles["agentic-toolcall"]; !ok {
+		t.Errorf("summary.roles missing observed role agentic-toolcall, got %v", keysOf(roles))
+	}
+	if len(roles) != 1 {
+		t.Errorf("summary.roles has %d entries; want 1 (observed-only)", len(roles))
+	}
+
+	// Role entry shape. Gated role must carry thresholdMet + threshold +
+	// verdict of PASS/FAIL; ungated roles would be INFO with no threshold
+	// fields. agentic-toolcall is gated at 90% in shared/gate-thresholds.yaml,
+	// so the single-correct test above yields pct=100 → PASS.
+	rs, _ := roles["agentic-toolcall"].(map[string]any)
+	for _, k := range []string{"verdict", "metrics", "scenarios", "correct", "partial", "incorrect", "errors", "total", "pct", "avgMs", "p50Ms", "scenarioCountExpected", "scenarioCountObserved"} {
+		if _, ok := rs[k]; !ok {
+			t.Errorf("role entry missing key %q", k)
 		}
 	}
 
-	// Five gated threshold rows.
+	// Thresholds rows synthesized only for gated roles that have
+	// observed scenarios. In this single-role test, exactly one.
 	thr, _ := summary["thresholds"].([]any)
-	if len(thr) != 5 {
-		t.Errorf("summary.thresholds has %d rows, want 5", len(thr))
+	if len(thr) != 1 {
+		t.Errorf("summary.thresholds has %d rows, want 1 (only the observed gated role)", len(thr))
 	}
 
-	// Per-query tool call shape: name + arguments only.
+	// Per-query shape: tier may be omitted (v2.1 scenarios carry role);
+	// role must be present on every result. Tool call shape unchanged.
 	results0 := decoded["results"].([]any)[0].(map[string]any)
+	if _, ok := results0["role"]; !ok {
+		t.Errorf("result missing role; got keys %v", keysOf(results0))
+	}
 	tc := results0["toolCalls"].([]any)[0].(map[string]any)
 	tcKeys := setOfMap(tc)
 	for _, k := range []string{"name", "arguments"} {
@@ -90,6 +122,14 @@ func TestScorecardShape(t *testing.T) {
 	if extra := extraKeys(tcKeys, "name", "arguments"); len(extra) > 0 {
 		t.Errorf("toolCall has extra keys %v — spec §7 only has name+arguments", extra)
 	}
+}
+
+func keysOf(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
 }
 
 func setOf(t *testing.T, m map[string]any, key string) map[string]bool {

@@ -2,7 +2,7 @@
 # agent accumulates context across turns. Purpose: verify the multi-turn
 # runner + mock tool registry + per-turn metrics collection all work.
 shared:
-  tier: T2
+  role: multiturn
 scenarios:
   - id: multiturn.progressive
     expected_tool: exec

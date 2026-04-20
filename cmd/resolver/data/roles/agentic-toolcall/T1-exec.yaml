@@ -1,6 +1,6 @@
 # Tier T1 — Direct commands should call `exec`. Rules per RESOLVER-VALIDATION-SPEC.md §5.
 shared:
-  tier: T1
+  role: agentic-toolcall
 scenarios:
   - id: T1.1
     query: restart the vllm 35b container

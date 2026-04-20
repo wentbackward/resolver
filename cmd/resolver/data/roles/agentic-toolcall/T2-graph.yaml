@@ -1,7 +1,7 @@
 # Tier T2 — Graph-aware questions should prefer `graph_query` (with generous
 # fallbacks; see spec §5).
 shared:
-  tier: T2
+  role: agentic-toolcall
 scenarios:
   - id: T2.1
     query: which services depend on llm-proxy

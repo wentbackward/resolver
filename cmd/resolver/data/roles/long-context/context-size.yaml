@@ -3,7 +3,7 @@
 # the needle's match_regex appears in the final assistant message or any
 # tool-call argument (case insensitive).
 shared:
-  tier: T2
+  role: long-context
 scenarios:
   - id: sweepB.needle
     query: |

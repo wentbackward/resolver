@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/wentbackward/resolver/internal/report"
@@ -12,34 +13,68 @@ import (
 	"github.com/wentbackward/resolver/internal/scenario"
 )
 
+// v1MigratedRoleDirs is the embedded role-organised path set that
+// collectively contains the original 31 Tier 1 scenarios migrated in
+// v2.1 Phase 2. The golden replay walks these (not the full roles/
+// tree) because canned-responses.json is keyed on the 31 historical
+// scenario IDs (T1.1…T10.3). New v2.1-native roles (reducer-json,
+// classifier, multiturn, tool-count-survival, long-context,
+// reducer-sexp) are deliberately excluded — they have no canned
+// entries and would error out.
+var v1MigratedRoleDirs = []string{
+	"roles/agentic-toolcall",
+	"roles/safety-refuse",
+	"roles/safety-escalate",
+	"roles/health-check",
+	"roles/node-resolution",
+	"roles/dep-reasoning",
+	"roles/hitl",
+}
+
+// loadV1MigratedScenarios walks the 7 role dirs holding v1-migrated
+// scenarios and returns them sorted by ID so the replay execution order
+// matches canned-responses.json regardless of filesystem iteration
+// quirks.
+func loadV1MigratedScenarios(t *testing.T, ds dataSource) []scenario.Scenario {
+	t.Helper()
+	var all []scenario.Scenario
+	for _, d := range v1MigratedRoleDirs {
+		sc, err := ds.walkScenarios(d)
+		if err != nil {
+			t.Fatalf("walk %s: %v", d, err)
+		}
+		all = append(all, sc...)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
+	return all
+}
+
 // TestGoldenReplay asserts byte-exact parity between the committed
 // `golden/scorecard_example.json` and the scorecard produced by replaying
-// `golden/canned-responses.json` in-process. This is the v1 parity anchor:
-// any future code change that drifts the scorecard shape, the verdict
-// logic, the timing aggregates, or the tier ordering must be caught here.
+// `golden/canned-responses.json` in-process. This is the v2.1 parity
+// anchor: any future code change that drifts the scorecard shape, the
+// verdict logic, the timing aggregates, or the role ordering must be
+// caught here.
+//
+// Set UPDATE_GOLDEN=1 to rewrite the golden file in-place (used after
+// an intentional shape change).
 //
 // The test runs fully offline — no network, no subprocess. It exercises:
-//   - embedded scenario loading (tier1/*.yaml + system-prompt.md + tools)
+//   - embedded scenario loading (roles/<v1-migrated>/*.yaml + system-prompt.md + tools)
 //   - replay loader (envelope shape with captured meta)
 //   - RunTier1 executor (replayer path, not live HTTP)
 //   - verdict evaluation for all 31 scenarios + partial-credit rules
-//   - report.Build (tier aggregation, threshold gating, timing aggregates)
+//   - report.Build (role aggregation, threshold gating, timing aggregates)
 //   - json.MarshalIndent + trailing-newline contract
 func TestGoldenReplay(t *testing.T) {
-	// v2.1: scenarios migrated from tier1/ to roles/; reporter shape moving
-	// from tier-based to role-based (Phase 5 golden regen pending).
-	t.Skip("v2.1 golden regen pending Phase 5 (T4): tier1/ retired, reporter not yet role-aware")
 	ds := dataSource{}
 	tools, sysPrompt, err := ds.loadToolsAndPrompt()
 	if err != nil {
 		t.Fatalf("load tools + prompt: %v", err)
 	}
-	scenarios, err := ds.walkScenarios("tier1")
-	if err != nil {
-		t.Fatalf("load scenarios: %v", err)
-	}
+	scenarios := loadV1MigratedScenarios(t, ds)
 	if len(scenarios) != 31 {
-		t.Fatalf("expected 31 scenarios, got %d", len(scenarios))
+		t.Fatalf("expected 31 v1-migrated scenarios, got %d", len(scenarios))
 	}
 
 	rp, capturedMeta, err := loadReplay("../../golden/canned-responses.json")
@@ -67,6 +102,14 @@ func TestGoldenReplay(t *testing.T) {
 	}
 	got = append(got, '\n')
 
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile("../../golden/scorecard_example.json", got, 0o644); err != nil {
+			t.Fatalf("update golden: %v", err)
+		}
+		t.Log("UPDATE_GOLDEN=1: rewrote golden/scorecard_example.json")
+		return
+	}
+
 	want, err := os.ReadFile("../../golden/scorecard_example.json")
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
@@ -81,21 +124,21 @@ func TestGoldenReplay(t *testing.T) {
 			_ = tmp.Close()
 			t.Logf("actual output written to %s for inspection", tmp.Name())
 		}
-		t.Fatalf("scorecard drifted from golden/scorecard_example.json — any code change that changes this must be a deliberate, documented v1-parity break")
+		t.Fatalf("scorecard drifted from golden/scorecard_example.json — any code change that changes this must be a deliberate, documented v2.1-parity break (rerun with UPDATE_GOLDEN=1 after inspection)")
 	}
 }
 
 // TestGoldenReplayUnderYAMLThresholds re-runs the replay with the
-// GatedTiers() source swapped from the hardcoded defaults to the embedded
-// YAML. The output scorecard must be byte-identical to the golden.
+// GatedTiers() source swapped from the hardcoded defaults to the
+// embedded v2.1 YAML. The output scorecard must be byte-identical to
+// the golden.
 //
-// This is the v2-plan-Phase-3 "scorecard-byte-parity" gate — it guards
-// against the YAML-defaults diverging from the hardcoded fallback in a
-// way that would invisibly drift the scorecard shape.
+// This is the "scorecard-byte-parity" gate — it guards against the
+// YAML-defaults diverging from the hardcoded fallback in a way that
+// would invisibly drift the scorecard shape.
 func TestGoldenReplayUnderYAMLThresholds(t *testing.T) {
-	t.Skip("v2.1 golden regen pending Phase 5 (T4): tier1/ retired, reporter not yet role-aware")
 	dataDir := dataSource{}
-	raw, err := dataDir.readFile("tier1/gate-thresholds.yaml")
+	raw, err := dataDir.readFile("shared/gate-thresholds.yaml")
 	if err != nil {
 		t.Fatalf("read embedded thresholds: %v", err)
 	}
@@ -113,10 +156,7 @@ func TestGoldenReplayUnderYAMLThresholds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scenarios, err := dataDir.walkScenarios("tier1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	scenarios := loadV1MigratedScenarios(t, dataDir)
 	rp, capturedMeta, err := loadReplay("../../golden/canned-responses.json")
 	if err != nil {
 		t.Fatal(err)

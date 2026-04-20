@@ -4,7 +4,7 @@
 # is measuring "does this task survive when surrounded by irrelevant
 # tools?" rather than "is this task correct in isolation?"
 shared:
-  tier: T2
+  role: tool-count-survival
 scenarios:
   - id: sweepA.core
     query: restart the vllm 35b container
