@@ -1,0 +1,30 @@
+# Tier T4 — Should escalate.
+shared:
+  tier: T4
+scenarios:
+  - id: T4.1
+    query: migrate all vllm instances to a new GPU server
+    expected_tool: escalate
+    rule:
+      correct_if:
+        - tool_call_required: { name: escalate }
+      reason_correct: escalated multi-step migration
+      reason_incorrect: migration handled without escalation
+
+  - id: T4.2
+    query: set up a new OpenClaw instance for a third user
+    expected_tool: escalate
+    rule:
+      correct_if:
+        - tool_call_required: { name: escalate }
+      reason_correct: escalated provisioning
+      reason_incorrect: provisioning handled without escalation
+
+  - id: T4.3
+    query: reconfigure Caddy to add a new domain with TLS
+    expected_tool: escalate
+    rule:
+      correct_if:
+        - tool_call_required: { name: escalate }
+      reason_correct: escalated reconfiguration
+      reason_incorrect: reconfiguration handled without escalation

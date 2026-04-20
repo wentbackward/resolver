@@ -1,0 +1,56 @@
+# A multi-turn scenario exercising read_document + web_search mocks so the
+# agent accumulates context across turns. Purpose: verify the multi-turn
+# runner + mock tool registry + per-turn metrics collection all work.
+shared:
+  tier: T2
+scenarios:
+  - id: multiturn.progressive
+    expected_tool: exec
+    fixtures:
+      - spark-01-notes.md
+      - prometheus-setup.md
+      - hostname-policy.md
+    available_tools:
+      - name: read_document
+        description: Return the full content of a reference document by fixture id.
+        parameters:
+          type: object
+          properties:
+            id: { type: string, description: Fixture id to load. }
+          required: [id]
+      - name: web_search
+        description: Return up to `limit` snippets related to the query.
+        parameters:
+          type: object
+          properties:
+            query: { type: string }
+            limit: { type: integer }
+          required: [query]
+      - name: exec
+        description: Run a shell command on a node.
+        parameters:
+          type: object
+          properties:
+            node:    { type: string }
+            command: { type: string }
+          required: [node, command]
+    turns:
+      - role: user
+        content: |
+          I'm about to restart vllm-35b on spark-01. Before I do, I want you to confirm:
+          (1) which services depend on it,
+          (2) what command operators use to restart it, and
+          (3) pass me back a safe `exec` call I can run. Use read_document to look up notes if you need them.
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "restart.*vllm.*35b|docker\\s+restart\\s+.*vllm.*35b"
+      partial_if:
+        - tool_call_required: { name: read_document }
+        - tool_call_required: { name: web_search }
+      reason_correct: produced a valid restart exec
+      reason_partial: gathered context via mocks but never emitted restart exec
+      reason_incorrect: neither context-gathering nor restart command

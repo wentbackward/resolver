@@ -1,0 +1,72 @@
+# Tier T3 — Diagnostic multi-step (informational). Verdict rule is identical
+# for all three queries: count of exec + graph_query + health_check calls.
+shared:
+  tier: T3
+scenarios:
+  - id: T3.1
+    query: openclaw-marvin is slow, diagnose it
+    expected_tool: exec
+    rule:
+      correct_if:
+        # 2+ diagnostic calls across exec/graph_query/health_check.
+        - tool_call_count_at_least: { name: exec,         min: 2 }
+        - tool_call_count_at_least: { name: graph_query,  min: 2 }
+        - tool_call_count_at_least: { name: health_check, min: 2 }
+        # mixed: at least one of each of two different kinds totals 2 via order matcher.
+        - tool_call_order: { names: [exec, graph_query] }
+        - tool_call_order: { names: [exec, health_check] }
+        - tool_call_order: { names: [graph_query, exec] }
+        - tool_call_order: { names: [graph_query, health_check] }
+        - tool_call_order: { names: [health_check, exec] }
+        - tool_call_order: { names: [health_check, graph_query] }
+      partial_if:
+        - tool_call_required: { name: exec }
+        - tool_call_required: { name: graph_query }
+        - tool_call_required: { name: health_check }
+      reason_correct: 2+ diagnostic calls made
+      reason_partial: exactly one diagnostic call made
+      reason_incorrect: no diagnostic calls
+
+  - id: T3.2
+    query: prometheus isn't scraping vllm metrics, find out why
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_count_at_least: { name: exec,         min: 2 }
+        - tool_call_count_at_least: { name: graph_query,  min: 2 }
+        - tool_call_count_at_least: { name: health_check, min: 2 }
+        - tool_call_order: { names: [exec, graph_query] }
+        - tool_call_order: { names: [exec, health_check] }
+        - tool_call_order: { names: [graph_query, exec] }
+        - tool_call_order: { names: [graph_query, health_check] }
+        - tool_call_order: { names: [health_check, exec] }
+        - tool_call_order: { names: [health_check, graph_query] }
+      partial_if:
+        - tool_call_required: { name: exec }
+        - tool_call_required: { name: graph_query }
+        - tool_call_required: { name: health_check }
+      reason_correct: 2+ diagnostic calls made
+      reason_partial: exactly one diagnostic call made
+      reason_incorrect: no diagnostic calls
+
+  - id: T3.3
+    query: users are getting 502 errors on marvin's web interface
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_count_at_least: { name: exec,         min: 2 }
+        - tool_call_count_at_least: { name: graph_query,  min: 2 }
+        - tool_call_count_at_least: { name: health_check, min: 2 }
+        - tool_call_order: { names: [exec, graph_query] }
+        - tool_call_order: { names: [exec, health_check] }
+        - tool_call_order: { names: [graph_query, exec] }
+        - tool_call_order: { names: [graph_query, health_check] }
+        - tool_call_order: { names: [health_check, exec] }
+        - tool_call_order: { names: [health_check, graph_query] }
+      partial_if:
+        - tool_call_required: { name: exec }
+        - tool_call_required: { name: graph_query }
+        - tool_call_required: { name: health_check }
+      reason_correct: 2+ diagnostic calls made
+      reason_partial: exactly one diagnostic call made
+      reason_incorrect: no diagnostic calls

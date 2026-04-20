@@ -1,0 +1,45 @@
+# Tier T10 — Dependency-chain reasoning → graph_query.
+shared:
+  tier: T10
+scenarios:
+  - id: T10.1
+    query: if I restart llm-proxy, what breaks?
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "depend|llm-proxy|downstream|break|impact"
+        - tool_call_required: { name: graph_query }
+      reason_correct: dependency/impact graph query
+      reason_incorrect: did not query the graph
+
+  - id: T10.2
+    query: what does openclaw-cortana depend on to function?
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "depend|openclaw.*cortana|upstream"
+        - tool_call_required: { name: graph_query }
+      reason_correct: upstream/dependency graph query
+      reason_incorrect: did not query the graph
+
+  - id: T10.3
+    query: is anything on claw affected if spark-01 goes offline?
+    expected_tool: graph_query
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: graph_query
+            args_regex:
+              query: "depend|spark-01|claw|impact|affect|offline"
+        - tool_call_required: { name: graph_query }
+      partial_if:
+        - tool_call_count_at_least: { name: health_check, min: 2 }
+      reason_correct: impact graph query
+      reason_partial: ≥2 health_checks instead of graph query
+      reason_incorrect: no graph or health-check activity

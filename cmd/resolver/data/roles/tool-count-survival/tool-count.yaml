@@ -1,0 +1,20 @@
+# Sweep A — tool-count. The core task is Tier 1's T1.1 (restart the vllm
+# 35b container). The decoy generator pads the tool list to the axis
+# target. The verdict is the same rule Tier 1 uses for T1.1 — so the sweep
+# is measuring "does this task survive when surrounded by irrelevant
+# tools?" rather than "is this task correct in isolation?"
+shared:
+  tier: T2
+scenarios:
+  - id: sweepA.core
+    query: restart the vllm 35b container
+    expected_tool: exec
+    rule:
+      correct_if:
+        - tool_call_required:
+            name: exec
+            args_regex:
+              node: "^spark-01$"
+              command: "restart.*vllm.*35b|docker\\s+restart\\s+.*vllm.*35b"
+      reason_correct: correct restart even under tool-count pressure
+      reason_incorrect: wrong tool, node, or command

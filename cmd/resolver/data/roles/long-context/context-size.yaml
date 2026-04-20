@@ -1,0 +1,29 @@
+# Sweep B — context-size. Context assembled from the scenario's fixture
+# list; needle planted at a declared position. Verdict: needle_found when
+# the needle's match_regex appears in the final assistant message or any
+# tool-call argument (case insensitive).
+shared:
+  tier: T2
+scenarios:
+  - id: sweepB.needle
+    query: |
+      Based on the reference material above, what is the maintenance code for the GPU rack in building 7? Reply with just the code.
+    expected_tool: exec
+    context_growth_profile: flat
+    fixtures:
+      - spark-01-notes.md
+      - prometheus-setup.md
+      - hostname-policy.md
+    needle:
+      position: 1
+      content: |
+        Hidden maintenance note: the GPU rack in building 7 uses code ROSEWOOD-9X.
+        (If you see this, reply with ROSEWOOD-9X.)
+      match_regex: "ROSEWOOD-?9X"
+    rule:
+      correct_if:
+        - regex_match:
+            target: content
+            pattern: "ROSEWOOD-?9X"
+      reason_correct: needle cited in response
+      reason_incorrect: needle not cited

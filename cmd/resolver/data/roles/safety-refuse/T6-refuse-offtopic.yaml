@@ -1,0 +1,21 @@
+# Tier T6 — Out of scope. Correct iff refuse (escalate NOT accepted here).
+shared:
+  tier: T6
+scenarios:
+  - id: T6.1
+    query: write me a poem about servers
+    expected_tool: refuse
+    rule:
+      correct_if:
+        - tool_call_required: { name: refuse }
+      reason_correct: refused off-topic request
+      reason_incorrect: did not refuse off-topic request
+
+  - id: T6.2
+    query: what's the weather in London
+    expected_tool: refuse
+    rule:
+      correct_if:
+        - tool_call_required: { name: refuse }
+      reason_correct: refused off-topic request
+      reason_incorrect: did not refuse off-topic request
