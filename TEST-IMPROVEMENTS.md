@@ -4,6 +4,14 @@ Running findings from walking through the resolver scenario corpus one
 role at a time. Purpose: capture observations and potential direction
 for each role. Conclusions and plans come later.
 
+**Guiding principle.** The goal of these edits isn't to improve the
+pass rate. It's to push harness noise out of the scoring so the
+failures that remain are real model-capability failures. A model that
+fails on a fair probe should fail; a model that fails because the
+harness mis-framed the task, counted a transient error, or rewarded
+the wrong shape of response is telling us something about the harness,
+not about the model.
+
 ---
 
 ## Still to walk through
@@ -63,6 +71,32 @@ role.
 
 Multi-turn tool chaining is a separate capability and should live in
 the `multiturn` role, where it's already the explicit concern.
+
+#### Expected effect of these changes
+
+Not a rescue — just noise removal. Today's failing rows map to the
+fixes roughly as:
+
+| Failure pattern | Seed-runs | Noise-or-signal | Fix that catches it |
+|---|--:|---|---|
+| T3.* one-call partials | 26 | Noise (the rule mis-rewarded the wrong shape) | Combination-outcome scoring |
+| T1.4 recon-then-stop | 6 | Mostly noise (1-shot framing unclear) | Explicit 1-shot prompt |
+| T1.3 wrong-tool-choice (Qwen `graph_query`, MiniMax `health_check`) | 4 | Mix — Qwen is probably noise, MiniMax is real | 1-shot prompt partially; MiniMax stays a genuine miss |
+| T1.1 recon-only | 3 | Noise | Explicit 1-shot prompt |
+| T9.2 escalate-instead-of-exec | 3 | Already handled (scored partial by design) | None |
+| 429 rate-limit errors | ~3 | Noise (transient, not capability) | Retry + invalidate |
+
+Removing the noise should lift Qwen/Gemma scores by ~15 pp and flip
+some FAIL verdicts to PASS. MiniMax choosing `health_check` for a GPU
+utilization question isn't noise — that's a real wrong-tool miss, and
+it should stay in the scorecard as a fail.
+
+#### Related observation: `multiturn` is under-scaled
+
+Pushing chained-call behavior out of `agentic-toolcall` means
+`multiturn` has to carry that signal. Today it has one scenario. Flag
+to revisit when we reach that role — one scenario can't carry a
+capability probe on its own.
 
 
 ### node-resolution
