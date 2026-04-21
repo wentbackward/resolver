@@ -56,6 +56,31 @@ slices get classified.
   Regex misses are self-explanatory; classifier misses need the
   payload recorded so disagreements are auditable.
 
+### Prompt-engineering discipline
+
+Small changes in prompt wording produce measurably different output
+behaviour at `temperature=0`. The `test-refusal-time.sh` spike
+surfaced this: asking for JSON output instead of single-word YES/NO
+introduced noticeable variability in what the small classifier
+returned, even with the same model + same temperature.
+
+The classifier role is a worked example of why this matters — but
+the implication is general, and it binds both directions of the A/B:
+
+- **Role-level system prompts are load-bearing.** An edit to a role's
+  `system-prompt.md` is a scorecard-relevant change and should land
+  in its own commit with before/after sweep evidence, not bundled
+  with unrelated work.
+- **Classifier-matcher prompts inherit the same property.** Their
+  exact wording *is* part of the matcher's behaviour. Pin them, version
+  them, check agreement against the calibration gold set whenever the
+  prompt changes.
+- **Prefer the minimum viable output contract.** One word, one label,
+  no punctuation. Avoid asking for JSON, explanations, reasoning, or
+  "think step by step" unless a specific matcher genuinely needs the
+  chain-of-thought. Fewer degrees of freedom = fewer silent
+  regressions.
+
 ---
 
 ## Still to walk through
@@ -69,6 +94,14 @@ slices get classified.
 - long-context
 - reducer-json
 - reducer-sexp
+
+**Pausing the walk-through** after `classifier` to iterate on the
+classifier role *and* the classifier-matcher work together. They share
+the same prompt-discipline requirements, so building them in parallel
+closes the feedback loop. Resume the remaining walk-through once that
+iteration has landed.
+
+---
 
 ## Reviewed
 
@@ -142,6 +175,69 @@ Pushing chained-call behavior out of `agentic-toolcall` means
 to revisit when we reach that role — one scenario can't carry a
 capability probe on its own.
 
+### node-resolution
+
+The underlying capability is *choosing the correct target/subject and
+handling ambiguity when more than one candidate fits*. The current
+framing — "node selection" — is too specific to the sysadm reference
+corpus; it leaks domain language into what should be a general
+capability probe.
+
+Note for later: the declared topology has a latent ambiguity
+(`marvin` the node vs `openclaw-marvin` the service running on
+`claw`) that none of the current T8 scenarios exploit.
+
+### dep-reasoning
+
+Should be about *knowledge freshness* — prefer looking things up over
+recalling from memory or the context, verify facts before committing
+to decisions, don't make things up. Current scenarios all ask about
+dependency graphs, which is just one instance of the broader
+capability.
+
+### classifier
+
+**Purpose refined.** This role is about **fast, intelligent routing**
+at the entry of a pipeline — deciding which model family the request
+should go to. It is not probing "which tool would get called" (that
+belongs in `agentic-toolcall`); it's probing "what *kind of work* is
+this?"
+
+**The current label set mixes work-classes with downstream actions.**
+`exec`, `escalate`, and `hitl` aren't classes of work — they're what
+some downstream component decides to do once the work is understood.
+A classifier at the front of a pipeline has no structural reason to
+emit them. The work-class taxonomy we actually want:
+
+| Label | Routes to | Example |
+|---|---|---|
+| `command` | instruct LLM (1-shot, deterministic) | "show disk usage on spark-01" |
+| `investigate` | reasoner LLM (diagnosis / problem-resolution) | "why is grafana showing no data since last night?" |
+| `code` | coder LLM | "write a systemd unit for the ingest worker" |
+| `chat` | chat / creative LLM | "brainstorm names for the monitoring service" |
+| `refuse` | filter LLM (profane, dangerous, abusive) | "rm -rf / on claw" |
+
+**Ordering is a requirement, not a tiebreaker.** `refuse` has to be
+checked *before* `command`, or a destructive-but-actionable request
+slips through to the instruct LLM. The role's system prompt must
+state this explicitly — "if the request is destructive or abusive,
+return `refuse` even if it otherwise looks like a 1-shot command."
+
+**This is the segue to classifier-matchers.** The rigor the
+classifier role needs on its own prompt is exactly the rigor the
+classifier-based matchers need. Same discipline, same tripwires
+(calibration gold set, pinned weights, output contract minimised).
+Doing these two together is the cleanest way to build that
+discipline in.
+
+**Scenario expansion required.** Today: 6 scenarios, one per old
+label. Target: ~5 per new label (≈25 total) plus targeted adversarial
+cases — a destructive request phrased as a 1-shot command (tests
+`refuse` beating `command`), a coding question phrased as chat
+(tests `code` beating `chat`), an investigation question that reads
+like a command ("what's eating memory on spark-01?" — `investigate`
+or `command`?).
+
 ---
 
 ## Parked ideas (not from role walk-through)
@@ -171,32 +267,3 @@ approach is right — deterministic, reproducible, no real side-effects
 
 Parked until we've finished the role walk-through — then plan
 properly.
-
-
-### node-resolution
-
-The underlying capability is *choosing the correct target/subject and
-handling ambiguity when more than one candidate fits*. The current
-framing — "node selection" — is too specific to the sysadm reference
-corpus; it leaks domain language into what should be a general
-capability probe.
-
-Note for later: the declared topology has a latent ambiguity
-(`marvin` the node vs `openclaw-marvin` the service running on
-`claw`) that none of the current T8 scenarios exploit.
-
-### dep-reasoning
-
-Should be about *knowledge freshness* — prefer looking things up over
-recalling from memory or the context, verify facts before committing
-to decisions, don't make things up. Current scenarios all ask about
-dependency graphs, which is just one instance of the broader
-capability.
-
-### classifier
-
-The label space (`hitl`, `exec`, `diagnose`, …) is a distinct axis
-from the scenario-role structure, so no conflict there — but the
-category itself is weak. Six scenarios isn't enough padding to draw
-reliable conclusions from. Needs substantial expansion before it
-carries real signal.
