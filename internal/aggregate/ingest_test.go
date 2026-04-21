@@ -5,6 +5,7 @@ package aggregate_test
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -218,6 +219,124 @@ func TestIngestComparisonView(t *testing.T) {
 	}
 	if n != 2 {
 		t.Errorf("comparison view rows: got %d, want 2", n)
+	}
+}
+
+// sweepRoleScorecard returns a minimal scorecard JSON with a single role entry
+// in summary.roles so the ingest path writes exactly one role_scorecards row.
+func sweepRoleScorecard(role string) string {
+	return `{
+  "meta": {
+    "model": "gresh-reasoner",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T00:00:00.000Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.0"
+  },
+  "summary": {
+    "roles": {
+      "` + role + `": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 0.6,
+        "metrics": {},
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "correct": 1, "partial": 0, "incorrect": 0, "errors": 0, "total": 1
+      }
+    },
+    "timing": { "totalMs": 100, "avgMs": 100, "p50Ms": 100, "p95Ms": 100, "maxMs": 100, "count": 1 }
+  },
+  "results": [
+    { "role": "` + role + `", "id": "` + role + `.t.1", "query": "q", "expectedTool": "", "score": "correct", "reason": "", "elapsedMs": 100, "toolCalls": [], "content": null }
+  ]
+}`
+}
+
+// writeRunWithScorecard is like writeRun but writes a custom scorecard body.
+func writeRunWithScorecard(t *testing.T, dir string, manifestJSON string, runConfigYAML string, scorecardJSON string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "manifests"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		RunID string `json:"runId"`
+	}
+	if err := json.Unmarshal([]byte(manifestJSON), &m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests", m.RunID+".json"), []byte(manifestJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "scorecard.json"), []byte(scorecardJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if runConfigYAML != "" {
+		if err := os.WriteFile(filepath.Join(dir, "run-config.yaml"), []byte(runConfigYAML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return m.RunID
+}
+
+// TestIngestRoleScorecardsForSweepRoles verifies that the three sweep roles
+// (multiturn, long-context, tool-count-survival) each produce a role_scorecards
+// row when ingested via aggregate.Run. Each role is written as a separate run
+// directory (matching real --role capture layout).
+func TestIngestRoleScorecardsForSweepRoles(t *testing.T) {
+	sweepRoles := []string{"multiturn", "long-context", "tool-count-survival"}
+
+	reportsDir := t.TempDir()
+	for i, role := range sweepRoles {
+		runID := fmt.Sprintf("sweep-smoke-%02d", i+1)
+		runDir := filepath.Join(reportsDir, "gresh-reasoner", role)
+		writeRunWithScorecard(t, runDir, v3Manifest(runID, role), v2Sidecar(), sweepRoleScorecard(role))
+	}
+
+	dbPath := filepath.Join(t.TempDir(), "sweep.duckdb")
+	if err := aggregate.Run(aggregate.Options{ReportsDir: reportsDir, DBPath: dbPath}); err != nil {
+		t.Fatalf("aggregate.Run: %v", err)
+	}
+
+	db, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var got int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM role_scorecards`).Scan(&got); err != nil {
+		t.Fatalf("count role_scorecards: %v", err)
+	}
+	if got != len(sweepRoles) {
+		t.Errorf("role_scorecards rows: got %d, want %d", got, len(sweepRoles))
+	}
+
+	// Verify each role is represented.
+	rows, err := db.Query(`SELECT role FROM role_scorecards ORDER BY role`)
+	if err != nil {
+		t.Fatalf("select role_scorecards: %v", err)
+	}
+	defer rows.Close()
+	var roles []string
+	for rows.Next() {
+		var r string
+		if err := rows.Scan(&r); err != nil {
+			t.Fatal(err)
+		}
+		roles = append(roles, r)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	wantRoles := []string{"long-context", "multiturn", "tool-count-survival"} // sorted
+	if len(roles) != len(wantRoles) {
+		t.Fatalf("role list: got %v, want %v", roles, wantRoles)
+	}
+	for i, want := range wantRoles {
+		if roles[i] != want {
+			t.Errorf("role[%d]: got %q, want %q", i, roles[i], want)
+		}
 	}
 }
 

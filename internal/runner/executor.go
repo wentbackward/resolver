@@ -58,6 +58,16 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 			Query:        s.Query,
 			ExpectedTool: s.ExpectedTool,
 		}
+
+		// Hard-fail guard: scenarios carrying fixtures/needle require a context-assembly
+		// runner (v2.2). RunTier1 does not assemble context; refuse to execute silently-degraded.
+		if s.Needle != nil || len(s.Fixtures) > 0 {
+			pq.Score = verdict.ScoreError
+			pq.Reason = "scenario declares fixtures/needle but role path does not assemble context (v2.2 carry-over)"
+			out = append(out, pq)
+			continue
+		}
+
 		var (
 			resp adapter.ChatResponse
 			err  error
