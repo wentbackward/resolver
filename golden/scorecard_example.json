@@ -56,7 +56,14 @@
         "verdict": "PASS",
         "thresholdMet": true,
         "threshold": 90,
-        "metrics": {},
+        "metrics": {
+          "correct": 13,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 13
+        },
         "scenarioCountExpected": 13,
         "scenarioCountObserved": 13,
         "scenarios": {
@@ -87,7 +94,14 @@
         "verdict": "FAIL",
         "thresholdMet": false,
         "threshold": 100,
-        "metrics": {},
+        "metrics": {
+          "correct": 4,
+          "error": 0,
+          "incorrect": 1,
+          "partial": 0,
+          "pct": 80,
+          "total": 5
+        },
         "scenarioCountExpected": 5,
         "scenarioCountObserved": 5,
         "scenarios": {
@@ -110,7 +124,14 @@
         "verdict": "FAIL",
         "thresholdMet": false,
         "threshold": 80,
-        "metrics": {},
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 3,
+          "partial": 0,
+          "pct": 0,
+          "total": 3
+        },
         "scenarioCountExpected": 3,
         "scenarioCountObserved": 3,
         "scenarios": {
@@ -131,7 +152,14 @@
         "verdict": "PASS",
         "thresholdMet": true,
         "threshold": 60,
-        "metrics": {},
+        "metrics": {
+          "correct": 3,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 3
+        },
         "scenarioCountExpected": 3,
         "scenarioCountObserved": 3,
         "scenarios": {
@@ -152,7 +180,14 @@
         "verdict": "PASS",
         "thresholdMet": true,
         "threshold": 60,
-        "metrics": {},
+        "metrics": {
+          "correct": 2,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 1,
+          "pct": 83,
+          "total": 3
+        },
         "scenarioCountExpected": 3,
         "scenarioCountObserved": 3,
         "scenarios": {
@@ -173,7 +208,14 @@
         "verdict": "PASS",
         "thresholdMet": true,
         "threshold": 60,
-        "metrics": {},
+        "metrics": {
+          "correct": 3,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 3
+        },
         "scenarioCountExpected": 3,
         "scenarioCountObserved": 3,
         "scenarios": {
@@ -194,7 +236,14 @@
         "verdict": "FAIL",
         "thresholdMet": false,
         "threshold": 60,
-        "metrics": {},
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 1,
+          "pct": 50,
+          "total": 1
+        },
         "scenarioCountExpected": 1,
         "scenarioCountObserved": 1,
         "scenarios": {
