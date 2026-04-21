@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "model": "gresh-coder",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T14:20:02.728Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "tool-count-survival \u003e= 80%",
+        "pct": 100,
+        "threshold": 80,
+        "pass": true
+      }
+    ],
+    "roles": {
+      "tool-count-survival": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 80,
+        "metrics": {
+          "correct": 1,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 1
+        },
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "scenarios": {
+          "sweepA.core": "correct"
+        },
+        "correct": 1,
+        "partial": 0,
+        "incorrect": 0,
+        "errors": 0,
+        "total": 1,
+        "pct": 100,
+        "avgMs": 2783,
+        "p50Ms": 2783
+      }
+    },
+    "timing": {
+      "totalMs": 2783,
+      "avgMs": 2783,
+      "p50Ms": 2783,
+      "p95Ms": 2783,
+      "maxMs": 2783,
+      "count": 1
+    }
+  },
+  "results": [
+    {
+      "role": "tool-count-survival",
+      "id": "sweepA.core",
+      "query": "restart the vllm 35b container",
+      "expectedTool": "exec",
+      "score": "correct",
+      "reason": "correct restart even under tool-count pressure",
+      "elapsedMs": 2783,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "docker restart vllm-35b",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    }
+  ]
+}

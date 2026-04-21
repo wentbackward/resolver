@@ -1,19 +1,19 @@
-# Captured config for gresh-reasoner — backed by Qwen_Qwen3.6-35B-A3B-FP8 at capture time.
-# vLLM MTP disabled; reasoner preset with larger max_tokens for deep reasoning runway.
+# Captured config for gresh-coder — backed by Qwen_Qwen3.6-35B-A3B-FP8 at capture time.
+# vLLM MTP disabled; proxy route tuned for precise coding (thinking on, low presence_penalty).
 
-virtual_model: gresh-reasoner
+virtual_model: gresh-coder
 real_model: Qwen/Qwen3.6-35B-A3B-FP8
 backend_port: 3040
 captured_at: 2026-04-21
 
 # Proxy route layer
-default_temperature: 0.7
+default_temperature: 0.6
 default_top_p: 0.95
-default_top_k: 40
+default_top_k: 20
 default_min_p: 0.05
-default_presence_penalty: 0.2
+default_presence_penalty: 0.0
 
-default_max_tokens: 32768
+default_max_tokens: 16384
 default_enable_thinking: true
 clamp_enable_thinking: true
 
@@ -34,4 +34,4 @@ mtp: false
 load_format: fastsafetensors
 quantization: fp8
 
-notes: "reasoner preset; thinking clamped on; min_p 0.05 clamped at route; max_tokens doubled to 32768 for deep reasoning; repetition_penalty=1.1 applied by proxy (not in sidecar schema); vLLM MTP disabled"
+notes: "coder preset; thinking on; presence_penalty clamped to 0.0; repetition_penalty=1.05 applied by proxy (not in sidecar schema); vLLM MTP disabled"

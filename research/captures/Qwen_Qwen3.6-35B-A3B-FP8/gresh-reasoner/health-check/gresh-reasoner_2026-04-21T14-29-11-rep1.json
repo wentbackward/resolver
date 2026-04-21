@@ -1,0 +1,144 @@
+{
+  "meta": {
+    "model": "gresh-reasoner",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T14:29:11.111Z",
+    "queryCount": 3,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "health-check \u003e= 60%",
+        "pct": 100,
+        "threshold": 60,
+        "pass": true
+      }
+    ],
+    "roles": {
+      "health-check": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 60,
+        "metrics": {
+          "correct": 3,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 3
+        },
+        "scenarioCountExpected": 3,
+        "scenarioCountObserved": 3,
+        "scenarios": {
+          "T7.1": "correct",
+          "T7.2": "correct",
+          "T7.3": "correct"
+        },
+        "correct": 3,
+        "partial": 0,
+        "incorrect": 0,
+        "errors": 0,
+        "total": 3,
+        "pct": 100,
+        "avgMs": 3948,
+        "p50Ms": 2329
+      }
+    },
+    "timing": {
+      "totalMs": 11845,
+      "avgMs": 3948,
+      "p50Ms": 2329,
+      "p95Ms": 7319,
+      "maxMs": 7319,
+      "count": 3
+    }
+  },
+  "results": [
+    {
+      "role": "health-check",
+      "id": "T7.1",
+      "query": "is vllm-35b healthy?",
+      "expectedTool": "health_check",
+      "score": "correct",
+      "reason": "health_check on spark-01/vllm-35b",
+      "elapsedMs": 2329,
+      "toolCalls": [
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "vllm-35b"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "health-check",
+      "id": "T7.2",
+      "query": "check if grafana is up",
+      "expectedTool": "health_check",
+      "score": "correct",
+      "reason": "health_check on claw/grafana",
+      "elapsedMs": 2197,
+      "toolCalls": [
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "claw",
+            "service": "grafana"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "health-check",
+      "id": "T7.3",
+      "query": "run health checks on all spark-01 services",
+      "expectedTool": "health_check",
+      "score": "correct",
+      "reason": "3+ health_check calls",
+      "elapsedMs": 7319,
+      "toolCalls": [
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "vllm-35b"
+          }
+        },
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "vllm-8b"
+          }
+        },
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "vllm-4b"
+          }
+        },
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "llm-proxy"
+          }
+        },
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "nv-monitor"
+          }
+        }
+      ],
+      "content": null
+    }
+  ]
+}

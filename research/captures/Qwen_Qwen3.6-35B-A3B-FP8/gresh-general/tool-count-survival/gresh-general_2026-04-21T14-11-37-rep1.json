@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "model": "gresh-general",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T14:11:37.812Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "tool-count-survival \u003e= 80%",
+        "pct": 0,
+        "threshold": 80,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "tool-count-survival": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 80,
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 1,
+          "partial": 0,
+          "pct": 0,
+          "total": 1
+        },
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "scenarios": {
+          "sweepA.core": "incorrect"
+        },
+        "correct": 0,
+        "partial": 0,
+        "incorrect": 1,
+        "errors": 0,
+        "total": 1,
+        "pct": 0,
+        "avgMs": 1896,
+        "p50Ms": 1896
+      }
+    },
+    "timing": {
+      "totalMs": 1896,
+      "avgMs": 1896,
+      "p50Ms": 1896,
+      "p95Ms": 1896,
+      "maxMs": 1896,
+      "count": 1
+    }
+  },
+  "results": [
+    {
+      "role": "tool-count-survival",
+      "id": "sweepA.core",
+      "query": "restart the vllm 35b container",
+      "expectedTool": "exec",
+      "score": "incorrect",
+      "reason": "wrong tool, node, or command",
+      "elapsedMs": 1896,
+      "toolCalls": [
+        {
+          "name": "health_check",
+          "arguments": {
+            "node": "spark-01",
+            "service": "vllm-35b"
+          }
+        }
+      ],
+      "content": "I'll restart the vllm-35b container on spark-01. Let me first check its current health status, then proceed with the restart.\n\n"
+    }
+  ]
+}

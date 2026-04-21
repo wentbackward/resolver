@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "model": "gresh-reasoner",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T14:32:00.584Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "long-context \u003e= 60%",
+        "pct": 0,
+        "threshold": 60,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "long-context": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 60,
+        "metrics": {
+          "correct": 0,
+          "error": 1,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 0,
+          "total": 1
+        },
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "scenarios": {
+          "sweepB.needle": "error"
+        },
+        "correct": 0,
+        "partial": 0,
+        "incorrect": 0,
+        "errors": 1,
+        "total": 1,
+        "pct": 0,
+        "avgMs": 0,
+        "p50Ms": 0
+      }
+    },
+    "timing": {
+      "totalMs": 0,
+      "avgMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "maxMs": 0,
+      "count": 0
+    }
+  },
+  "results": [
+    {
+      "role": "long-context",
+      "id": "sweepB.needle",
+      "query": "Based on the reference material above, what is the maintenance code for the GPU rack in building 7? Reply with just the code.\n",
+      "expectedTool": "exec",
+      "score": "error",
+      "reason": "scenario declares fixtures/needle but role path does not assemble context (v2.2 carry-over)",
+      "elapsedMs": 0,
+      "toolCalls": null,
+      "content": null
+    }
+  ]
+}
