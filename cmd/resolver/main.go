@@ -60,6 +60,7 @@ type flags struct {
 	dataDir     string
 	out         string
 	role        string
+	noClassifier bool
 }
 
 // selectAdapter returns the Adapter for the given flags. Defaults to
@@ -178,6 +179,40 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		n = 1
 	}
 
+	// Classifier setup: create the ollama adapter and run preflight (ping +
+	// digest check + gold-set calibration) once before the repeat loop.
+	// --no-classifier short-circuits everything: classifierAd stays nil and
+	// every ClassifierMatch arm in verdict.matchOne is skipped silently.
+	var classifierAd adapter.Adapter
+	var classifierDataDir string
+	if !f.noClassifier {
+		classifierAd = adapter.NewOllamaChat("")
+		cdd, cleanup, err := setupClassifierDataDir(f, dataDir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error: classifier data dir:", err)
+			return 2
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
+		classifierDataDir = cdd
+
+		pinsPath := filepath.Join(classifierDataDir, "gold-sets", "classifier-pins.yaml")
+		goldPath := filepath.Join(classifierDataDir, "gold-sets", "safety-refusal.yaml")
+		promptPath := filepath.Join(classifierDataDir, "matcher-prompts", "safety-refusal.txt")
+		pf := runner.PreflightConfig{
+			ClassifierBaseURL: "http://localhost:11434",
+			PinsFile:          pinsPath,
+			GoldSetFile:       goldPath,
+			PromptPath:        promptPath,
+			Classifier:        classifierAd,
+		}
+		if err := runner.RunPreflight(ctx, pf); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 2
+		}
+	}
+
 	// Reproducibility-repeat loop: `-n N` runs Tier 1 N times in sequence.
 	// k=0 keeps the single-run filename (backwards compatible with scripts
 	// that glob `reports/results/*.json`); k>0 suffixes `-rep{k}` to avoid
@@ -190,7 +225,7 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		if k > 0 {
 			suffix = fmt.Sprintf("-rep%d", k)
 		}
-		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup)
+		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup, classifierAd, classifierDataDir)
 		if k == 0 {
 			firstExitCode = code
 			repeatGroup = rg
@@ -199,13 +234,61 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	return firstExitCode
 }
 
+// setupClassifierDataDir resolves the filesystem directory from which
+// classifier data files (pins, gold-sets, matcher-prompts) are read.
+//
+// When --data-dir is set the external directory is used directly.
+// Otherwise, the files are extracted from the embedded FS to a temp dir so
+// that os.ReadFile calls in preflight and verdict can reach them. The returned
+// cleanup func removes the temp dir; it is nil when --data-dir is used.
+func setupClassifierDataDir(f flags, ds dataSource) (string, func(), error) {
+	if f.dataDir != "" {
+		return f.dataDir, nil, nil
+	}
+
+	// Extract the classifier data files from the embedded FS.
+	needed := []string{
+		"gold-sets/classifier-pins.yaml",
+		"gold-sets/safety-refusal.yaml",
+		"matcher-prompts/safety-refusal.txt",
+	}
+
+	tmpDir, err := os.MkdirTemp("", "resolver-classifier-*")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(tmpDir) }
+
+	for _, rel := range needed {
+		content, err := ds.readFile(rel)
+		if err != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("extract %s from embedded data: %w", rel, err)
+		}
+		dest := filepath.Join(tmpDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			cleanup()
+			return "", nil, err
+		}
+		if err := os.WriteFile(dest, []byte(content), 0o644); err != nil {
+			cleanup()
+			return "", nil, err
+		}
+	}
+	return tmpDir, cleanup, nil
+}
+
 // runTierOnce is one iteration of the Tier 1 run. Lifted out of runTier
 // so the reproducibility repeat loop can call it N times. `suffix` lands
 // on the scorecard filename (e.g. `-rep2`); `repeatGroup` lands on the
 // manifest runConfig so rows can be joined downstream.
+//
+// classifierAd is the pre-initialised classifier adapter (nil on --no-classifier).
+// classifierDataDir is the resolved data directory for prompt_ref paths.
 func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tools []scenario.ToolDef, sysPrompt string, scenarios []scenario.Scenario,
-	suffix, repeatGroup string) (int, string) {
+	suffix, repeatGroup string,
+	classifierAd adapter.Adapter, classifierDataDir string) (int, string) {
 
 	ad := selectAdapter(f)
 	commonOpts := runner.ExecuteOpts{
@@ -214,6 +297,8 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 		Model:        f.model,
 		APIKey:       f.apiKey,
 		Timeout:      180 * time.Second,
+		Classifier:   classifierAd,
+		DataDir:      classifierDataDir,
 	}
 
 	// Replay mode: override scorecard meta so the golden diff is a pure
@@ -484,6 +569,7 @@ func parseFlags() flags {
 	flag.StringVar(&f.thresholds, "thresholds", "", "path to a gate-thresholds YAML overriding the embedded defaults")
 	flag.StringVar(&f.dataDir, "data-dir", "", "override embedded data with an external directory")
 	flag.StringVar(&f.out, "out", "", "output directory (default reports/results or reports/sweeps)")
+	flag.BoolVar(&f.noClassifier, "no-classifier", envOr("RESOLVER_NO_CLASSIFIER", "") != "", "disable the classifier matcher (skips preflight and all ClassifierMatch arms)")
 	flag.Parse()
 	return f
 }

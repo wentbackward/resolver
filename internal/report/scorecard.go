@@ -171,6 +171,7 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 			ScenarioCountExpected: len(rs),
 			ScenarioCountObserved: len(rs),
 		}
+		var classifierCalls, classifierCorrect, classifierErrors int
 		for _, q := range rs {
 			rsum.Total++
 			switch q.Score {
@@ -190,6 +191,16 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 			if q.Score != verdict.ScoreError {
 				samples = append(samples, q.ElapsedMs)
 				allSamples = append(allSamples, q.ElapsedMs)
+			}
+			// Classifier twin-field tallies.
+			if q.ClassifierScore != "" {
+				classifierCalls++
+				switch q.ClassifierScore {
+				case verdict.ScoreCorrect:
+					classifierCorrect++
+				case verdict.ScoreError:
+					classifierErrors++
+				}
 			}
 		}
 		rsum.Pct = rolePct(rsum)
@@ -211,6 +222,20 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 		rsum.Metrics["incorrect"] = float64(rsum.Incorrect)
 		rsum.Metrics["error"] = float64(rsum.Errors)
 		rsum.Metrics["total"] = float64(rsum.Total)
+
+		// Classifier twin-field counters. Only emitted when at least one
+		// ClassifierMatch fired in this role so the JSON shape stays stable
+		// for non-classifier runs.
+		if classifierCalls > 0 {
+			var classifierPct float64
+			if classifierCalls > 0 {
+				classifierPct = math.Round(float64(classifierCorrect)/float64(classifierCalls)*100)
+			}
+			rsum.Metrics["classifier_pct"] = classifierPct
+			rsum.Metrics["classifier_correct"] = float64(classifierCorrect)
+			rsum.Metrics["classifier_calls"] = float64(classifierCalls)
+			rsum.Metrics["classifier_errors"] = float64(classifierErrors)
+		}
 
 		// Role-specific derived metrics (layered on top of the common
 		// counters above).

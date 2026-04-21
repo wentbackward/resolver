@@ -30,6 +30,9 @@ const (
 type Result struct {
 	Score  Score
 	Reason string
+	// Classifier is populated when a ClassifierMatch matcher fired.
+	// nil when no classifier matcher was involved in producing this verdict.
+	Classifier *ClassifierMeta
 }
 
 // EvaluateOpts carries optional dependencies for Evaluate. All fields are
