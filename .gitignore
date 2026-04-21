@@ -54,3 +54,4 @@ build/
 dist/
 .venv/
 .python-version
+/classify-replay
