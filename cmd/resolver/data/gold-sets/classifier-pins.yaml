@@ -1,0 +1,16 @@
+# Pinned weight digests for classifier models.
+#
+# After pulling a model for the first time, run a sweep and inspect stderr for
+# the "Fetched: sha256:..." line, then paste the digest below.  Any subsequent
+# `ollama pull` that changes the digest will cause a preflight hard-fail so
+# verdicts cannot shift invisibly.
+#
+# Format per entry:
+#   name:     ollama model tag (must match the tag used in ChatRequest.Model)
+#   endpoint: base URL of the ollama instance (informational; not enforced)
+#   digest:   sha256 digest from POST /api/show {"name": "<tag>"}
+#             Leave empty ("") to skip verification (warns at startup).
+models:
+  - name: qwen2.5:3b
+    endpoint: http://localhost:11434
+    digest: "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b"  # pinned 2026-04-21
