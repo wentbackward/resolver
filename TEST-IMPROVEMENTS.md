@@ -98,6 +98,36 @@ Pushing chained-call behavior out of `agentic-toolcall` means
 to revisit when we reach that role — one scenario can't carry a
 capability probe on its own.
 
+---
+
+## Parked ideas (not from role walk-through)
+
+### Multi-turn tool calling as its own testing category
+
+Worth promoting beyond a single role. The mocking-tool-responses
+approach is right — deterministic, reproducible, no real side-effects
+— but the category would need its own thinking:
+
+- **What does multi-turn probe that single-turn doesn't?** Candidates:
+  - chain-of-tool-calls where later calls depend on earlier results
+  - proper context accumulation across turns
+  - recovery from a tool that returns an error or empty result
+  - knowing when to stop (not infinitely looping through tools)
+  - managing context growth as tool outputs pile up
+- **Mock design.** Scenarios would declare each tool's canned
+  responses keyed on call-arguments, so the mock behaves
+  deterministically but responds to the specific call the model
+  makes. Already the shape used by the existing `multiturn.progressive`
+  scenario — just needs extending.
+- **Scoring.** Not a single regex match at the end. More like:
+  *"did the sequence eventually produce the right artefact?"*
+  Probably a terminal-state check on the last assistant turn, plus
+  maybe invariants over the intermediate turns (no forbidden tool,
+  didn't hallucinate, etc.).
+
+Parked until we've finished the role walk-through — then plan
+properly.
+
 
 ### node-resolution
 
