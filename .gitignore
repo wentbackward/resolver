@@ -1,5 +1,6 @@
 # Build outputs
 /resolver
+/resolver-duckdb
 /dist/
 
 # Reports are ephemeral per-run — except the canonical community-benchmarks
@@ -10,11 +11,16 @@
 /reports/*
 !/reports/community-benchmarks.yaml
 
-# OMC local state (worktree ephemera); keep skills/specs/plans
-/.omc/state/
-/.omc/sessions/
-/.omc/logs/
-/.omc/drafts/
+# OMC local state (worktree ephemera); keep skills/specs/plans.
+# `**/` so patterns also catch nested .omc/ dirs
+# (e.g. tools/analyze/.omc/state/).
+**/.omc/state/
+**/.omc/sessions/
+**/.omc/logs/
+**/.omc/drafts/
+**/.omc/prd.json
+**/.omc/progress.txt
+**/.omc/project-memory.json
 
 # Reporting workspace — per-checkout venv, duckdb-tagged binary, user
 # notebook copies. Created by scripts/report.sh. Safe to delete.
