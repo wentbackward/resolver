@@ -5,6 +5,7 @@
 package verdict
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"strconv"
@@ -31,57 +32,127 @@ type Result struct {
 	Reason string
 }
 
+// EvaluateOpts carries optional dependencies for Evaluate. All fields are
+// optional; the zero value produces the same behaviour as the pre-B3 call
+// (no classifier, backward compatible).
+type EvaluateOpts struct {
+	// Classifier, if non-nil, is used for ClassifierMatch matchers.
+	// When nil (including the --no-classifier path), ClassifierMatch matchers
+	// are silently skipped (not counted as matches).
+	Classifier adapter.Adapter
+
+	// Ctx is the parent context for classifier calls. Defaults to
+	// context.Background() when nil.
+	Ctx context.Context
+
+	// DataDir is the base directory for resolving prompt_ref paths relative
+	// to the data directory (e.g. cmd/resolver/data/). Defaults to "." when
+	// empty.
+	DataDir string
+}
+
 // Evaluate applies a scenario's rule to an observed tool-call trace +
 // assistant content. Correct wins over partial wins over incorrect.
-func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string) Result {
-	if matchAny(s.Rule.CorrectIf, calls, content) {
+//
+// Pass an EvaluateOpts to inject a classifier for ClassifierMatch matchers.
+// The variadic form preserves backward compatibility — existing callers with
+// no opts continue to compile and behave identically.
+func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, opts ...EvaluateOpts) Result {
+	var cc *classifierCtx
+	if len(opts) > 0 && opts[0].Classifier != nil {
+		ctx := opts[0].Ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		cc = &classifierCtx{
+			cl:      opts[0].Classifier,
+			ctx:     ctx,
+			dataDir: opts[0].DataDir,
+		}
+	}
+
+	ok, errRes := matchAny(s.Rule.CorrectIf, calls, content, cc)
+	if errRes != nil {
+		return *errRes
+	}
+	if ok {
 		return Result{Score: ScoreCorrect, Reason: firstNonEmpty(s.Rule.ReasonCorrect, "matched correct_if rule")}
 	}
-	if matchAny(s.Rule.PartialIf, calls, content) {
+
+	ok, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
+	if errRes != nil {
+		return *errRes
+	}
+	if ok {
 		return Result{Score: ScorePartial, Reason: firstNonEmpty(s.Rule.ReasonPartial, "matched partial_if rule")}
 	}
+
 	return Result{Score: ScoreIncorrect, Reason: firstNonEmpty(s.Rule.ReasonIncorrect, "did not match correct_if or partial_if")}
 }
 
-// matchAny returns true if at least one Matcher in the list evaluates to
-// true.
-func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string) bool {
+// matchAny returns (true, nil) if at least one Matcher evaluates to true,
+// (false, &Result{ScoreError, ...}) if a ClassifierMatch returns an error,
+// or (false, nil) if no matcher matches.
+func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *Result) {
 	for _, m := range ms {
-		if matchOne(m, calls, content) {
-			return true
+		ok, errRes := matchOne(m, calls, content, cc)
+		if errRes != nil {
+			return false, errRes
+		}
+		if ok {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
-func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string) bool {
+// matchOne evaluates a single Matcher. Returns (matched, nil) for structural
+// matchers; (false, &Result{ScoreError}) when a ClassifierMatch call fails or
+// returns a non-YES/NO answer; (false, nil) when ClassifierMatch is skipped
+// because no classifier is injected.
+func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *Result) {
 	switch {
 	case m.ToolCallRequired != nil:
-		return hasToolCallMatch(calls, *m.ToolCallRequired)
+		return hasToolCallMatch(calls, *m.ToolCallRequired), nil
 	case m.ToolCallForbidden != nil:
-		return !hasToolCallMatch(calls, *m.ToolCallForbidden)
+		return !hasToolCallMatch(calls, *m.ToolCallForbidden), nil
 	case m.ToolCallOrder != nil:
-		return isSubsequence(calls, m.ToolCallOrder.Names)
+		return isSubsequence(calls, m.ToolCallOrder.Names), nil
 	case m.ToolCallCountAtLeast != nil:
-		return countMatches(calls, m.ToolCallCountAtLeast.Name, m.ToolCallCountAtLeast.ArgsRegex) >= m.ToolCallCountAtLeast.Min
+		return countMatches(calls, m.ToolCallCountAtLeast.Name, m.ToolCallCountAtLeast.ArgsRegex) >= m.ToolCallCountAtLeast.Min, nil
 	case m.ToolCallCountInRange != nil:
 		c := countMatches(calls, m.ToolCallCountInRange.Name, m.ToolCallCountInRange.ArgsRegex)
-		return c >= m.ToolCallCountInRange.Min && c <= m.ToolCallCountInRange.Max
+		return c >= m.ToolCallCountInRange.Min && c <= m.ToolCallCountInRange.Max, nil
 	case m.RegexMatch != nil:
-		return regexMatchesTarget(*m.RegexMatch, calls, content)
+		return regexMatchesTarget(*m.RegexMatch, calls, content), nil
 	case m.AnyToolCall != nil:
-		return hasToolCallMatch(calls, *m.AnyToolCall)
+		return hasToolCallMatch(calls, *m.AnyToolCall), nil
 	case m.LabelIs != nil:
-		return labelMatches(content, *m.LabelIs)
+		return labelMatches(content, *m.LabelIs), nil
 	case m.ParseValidJSON != nil:
 		if !*m.ParseValidJSON {
-			return false
+			return false, nil
 		}
-		return json.Valid([]byte(stripThinkAndTrim(content)))
+		return json.Valid([]byte(stripThinkAndTrim(content))), nil
 	case m.JSONFieldPresent != nil:
-		return jsonFieldPresent(content, *m.JSONFieldPresent)
+		return jsonFieldPresent(content, *m.JSONFieldPresent), nil
+	case m.ClassifierMatch != nil:
+		if cc == nil {
+			// No classifier injected (--no-classifier path); skip silently.
+			return false, nil
+		}
+		cr := callClassifier(cc, cc.promptPath(m.ClassifierMatch.PromptRef), content)
+		r := interpretClassifier(cr, m.ClassifierMatch)
+		switch r.Score {
+		case ScoreCorrect:
+			return true, nil
+		case ScoreIncorrect:
+			return false, nil
+		default: // ScoreError
+			return false, &r
+		}
 	}
-	return false
+	return false, nil
 }
 
 // thinkTagRe matches reasoning-model `<think>...</think>` preambles. Must be
