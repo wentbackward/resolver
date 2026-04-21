@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -183,8 +184,12 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	// digest check + gold-set calibration) once before the repeat loop.
 	// --no-classifier short-circuits everything: classifierAd stays nil and
 	// every ClassifierMatch arm in verdict.matchOne is skipped silently.
-	var classifierAd adapter.Adapter
-	var classifierDataDir string
+	var (
+		classifierAd           adapter.Adapter
+		classifierDataDir      string
+		classifierWeightDigest string
+		classifierPromptHash   string
+	)
 	if !f.noClassifier {
 		classifierAd = adapter.NewOllamaChat("")
 		cdd, cleanup, err := setupClassifierDataDir(f, dataDir)
@@ -207,10 +212,17 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 			PromptPath:        promptPath,
 			Classifier:        classifierAd,
 		}
-		if err := runner.RunPreflight(ctx, pf); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+		pfResult, pfErr := runner.RunPreflight(ctx, pf)
+		if pfErr != nil {
+			fmt.Fprintln(os.Stderr, "error:", pfErr)
 			return 2
 		}
+		// Compute prompt hash for manifest provenance (B6).
+		if promptBytes, readErr := os.ReadFile(promptPath); readErr == nil {
+			h := sha256.Sum256(promptBytes)
+			classifierPromptHash = fmt.Sprintf("%x", h[:])
+		}
+		classifierWeightDigest = pfResult.ModelDigest
 	}
 
 	// Reproducibility-repeat loop: `-n N` runs Tier 1 N times in sequence.
@@ -225,7 +237,8 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		if k > 0 {
 			suffix = fmt.Sprintf("-rep%d", k)
 		}
-		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup, classifierAd, classifierDataDir)
+		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup,
+			classifierAd, classifierDataDir, classifierWeightDigest, classifierPromptHash)
 		if k == 0 {
 			firstExitCode = code
 			repeatGroup = rg
@@ -288,7 +301,8 @@ func setupClassifierDataDir(f flags, ds dataSource) (string, func(), error) {
 func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tools []scenario.ToolDef, sysPrompt string, scenarios []scenario.Scenario,
 	suffix, repeatGroup string,
-	classifierAd adapter.Adapter, classifierDataDir string) (int, string) {
+	classifierAd adapter.Adapter, classifierDataDir string,
+	classifierWeightDigest, classifierPromptHash string) (int, string) {
 
 	ad := selectAdapter(f)
 	commonOpts := runner.ExecuteOpts{
@@ -319,6 +333,12 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tok := tokenizer.Default()
 	resolvedRole := resolveScenarioRole(scenarios)
 	mb := manifest.NewBuilder(f.model, f.endpoint, ad.Name(), string(tok.Mode())).WithRole(resolvedRole)
+	if f.noClassifier {
+		mb = mb.WithClassifierDisabled()
+	} else if classifierWeightDigest != "" {
+		mb = mb.WithClassifier("qwen2.5:3b", classifierWeightDigest, "http://localhost:11434",
+			"matcher-prompts/safety-refusal.txt", classifierPromptHash)
+	}
 
 	// Optional --run-config sidecar: capture proxy + vLLM recipe metadata into
 	// the manifest alongside the scorecard. Unknown values stay unset.

@@ -32,13 +32,14 @@ func TestTier1RepeatRun(t *testing.T) {
 	// that symlinks the 7 v1-migrated role dirs under tier1/.
 	dd := makeV2_1TierShim(t)
 	f := flags{
-		tier:     "1",
-		model:    "gresh-general",
-		endpoint: "http://localhost:4000/v1/chat/completions",
-		replay:   filepath.Join(repoRoot(t), "golden", "canned-responses.json"),
-		out:      out,
-		nSeeds:   3,
-		dataDir:  dd,
+		tier:         "1",
+		model:        "gresh-general",
+		endpoint:     "http://localhost:4000/v1/chat/completions",
+		replay:       filepath.Join(repoRoot(t), "golden", "canned-responses.json"),
+		out:          out,
+		nSeeds:       3,
+		dataDir:      dd,
+		noClassifier: true, // replay test: no live classifier needed
 	}
 	ds, derr := resolveDataDir(dd)
 	if derr != nil {

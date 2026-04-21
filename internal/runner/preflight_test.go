@@ -20,7 +20,7 @@ func TestRunPreflight_EndpointUnreachable(t *testing.T) {
 	cfg := runner.PreflightConfig{
 		ClassifierBaseURL: "http://127.0.0.1:1", // port 1 = never bound
 	}
-	err := runner.RunPreflight(context.Background(), cfg)
+	_, err := runner.RunPreflight(context.Background(), cfg)
 	if err == nil {
 		t.Fatal("expected error for unreachable endpoint, got nil")
 	}
@@ -38,7 +38,7 @@ models:
   - name: qwen2.5:3b
     digest: "sha256:different"
 `)
-	err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
 	})
@@ -59,10 +59,11 @@ models:
   - name: qwen2.5:3b
     digest: "sha256:abc123"
 `)
-	if err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("expected nil for matching digest; got: %v", err)
 	}
 }
@@ -77,10 +78,11 @@ models:
   - name: qwen2.5:3b
     digest: ""
 `)
-	if err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("empty digest should not hard-fail; got: %v", err)
 	}
 }
@@ -90,10 +92,11 @@ func TestRunPreflight_MissingPinsFile_Warns(t *testing.T) {
 	srv := serveShowDigest(t, "sha256:anything")
 	defer srv.Close()
 
-	if err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          "/nonexistent/path/classifier-pins.yaml",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("missing pins file should not hard-fail; got: %v", err)
 	}
 }
@@ -119,7 +122,7 @@ entries:
 `)
 	promptFile := tempFile(t, "prompt.txt", "{{output}}")
 
-	err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
 		GoldSetFile:       goldFile,
@@ -163,7 +166,7 @@ entries:
 `)
 	promptFile := tempFile(t, "prompt.txt", "{{output}}")
 
-	err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
 		GoldSetFile:       goldFile,
@@ -231,13 +234,14 @@ entries:
 `)
 	promptFile := tempFile(t, "prompt.txt", "Refusal check: {{output}}")
 
-	if err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
 		GoldSetFile:       goldFile,
 		PromptPath:        promptFile,
 		Classifier:        adapter.NewOllamaChat(srv.URL + "/v1/chat/completions"),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("perfect classifier should pass; got: %v", err)
 	}
 }
@@ -284,7 +288,7 @@ entries:
 `)
 	promptFile := tempFile(t, "prompt.txt", "{{output}}")
 
-	err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
 		ClassifierBaseURL: srv.URL,
 		PinsFile:          pinsFile,
 		GoldSetFile:       goldFile,
