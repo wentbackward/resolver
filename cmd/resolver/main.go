@@ -41,24 +41,38 @@ const (
 )
 
 type flags struct {
-	endpoint   string
-	model      string
-	tier       string
-	scenario   string
-	sweep      string
-	axis       string
-	nSeeds     int
-	gate       string
-	parallel   bool
-	dryRun     bool
-	apiKey     string
-	replay     string
-	emitReplay string
-	runConfig  string
-	thresholds string
-	dataDir    string
-	out        string
-	role       string
+	endpoint    string
+	adapterName string
+	model       string
+	tier        string
+	scenario    string
+	sweep       string
+	axis        string
+	nSeeds      int
+	gate        string
+	parallel    bool
+	dryRun      bool
+	apiKey      string
+	replay      string
+	emitReplay  string
+	runConfig   string
+	thresholds  string
+	dataDir     string
+	out         string
+	role        string
+}
+
+// selectAdapter returns the Adapter for the given flags. Defaults to
+// openai-chat; pass --adapter=ollama (or RESOLVER_ADAPTER=ollama) to use the
+// ollama-chat adapter (adds retry/backoff on 503, targets localhost:11434 when
+// endpoint is the default).
+func selectAdapter(f flags) adapter.Adapter {
+	switch f.adapterName {
+	case "ollama", "ollama-chat":
+		return adapter.NewOllamaChat(f.endpoint)
+	default:
+		return adapter.NewOpenAIChat(f.endpoint)
+	}
 }
 
 func main() {
@@ -193,7 +207,7 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tools []scenario.ToolDef, sysPrompt string, scenarios []scenario.Scenario,
 	suffix, repeatGroup string) (int, string) {
 
-	ad := adapter.NewOpenAIChat(f.endpoint)
+	ad := selectAdapter(f)
 	commonOpts := runner.ExecuteOpts{
 		SystemPrompt: sysPrompt,
 		Tools:        tools,
@@ -252,9 +266,19 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	// the *virtual* model name, not the real one, so carrying it forward
 	// would mislead downstream diffs. In replay mode users rely on the
 	// --run-config sidecar's real_model field instead.)
+	//
+	// Not all adapters implement the probe (e.g. ollama-chat targets a local
+	// endpoint where the "virtual model" concept doesn't apply). Use a local
+	// interface so adapters that provide it opt in without changing Adapter.
 	if capturedMeta == nil {
-		resolved := ad.ResolveRealModel(ctx, f.model)
-		mb = mb.WithResolvedRealModel(resolved)
+		type modelResolver interface {
+			ResolveRealModel(ctx context.Context, forModel string) string
+		}
+		if mr, ok := ad.(modelResolver); ok {
+			mb = mb.WithResolvedRealModel(mr.ResolveRealModel(ctx, f.model))
+		} else {
+			mb = mb.WithResolvedRealModel("unknown")
+		}
 	}
 
 	var perQueries []runner.PerQuery
@@ -365,7 +389,7 @@ func runSweep(ctx context.Context, f flags, dataDir dataSource) int {
 		return 0
 	}
 
-	ad := adapter.NewOpenAIChat(f.endpoint)
+	ad := selectAdapter(f)
 	tok := tokenizer.Default()
 	mt := runner.MultiTurnOpts{
 		ExecuteOpts: runner.ExecuteOpts{
@@ -442,6 +466,7 @@ func runSweep(ctx context.Context, f flags, dataDir dataSource) int {
 func parseFlags() flags {
 	f := flags{}
 	flag.StringVar(&f.endpoint, "endpoint", envOr("RESOLVER_ENDPOINT", defaultEndpoint), "chat completions endpoint")
+	flag.StringVar(&f.adapterName, "adapter", envOr("RESOLVER_ADAPTER", "openai-chat"), "adapter to use: openai-chat (default) or ollama-chat")
 	flag.StringVar(&f.model, "model", envOr("RESOLVER_MODEL", defaultModel), "model identifier")
 	flag.StringVar(&f.tier, "tier", "1", "tier to run: 1 or 2")
 	flag.StringVar(&f.role, "role", "", "role to run (e.g. agentic-toolcall); loads roles/<role>/*.yaml with its own system prompt")
