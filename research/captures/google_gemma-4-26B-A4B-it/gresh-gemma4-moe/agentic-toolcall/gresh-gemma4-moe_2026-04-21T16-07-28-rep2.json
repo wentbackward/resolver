@@ -1,0 +1,307 @@
+{
+  "meta": {
+    "model": "gresh-gemma4-moe",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:07:28.838Z",
+    "queryCount": 13,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "agentic-toolcall \u003e= 90%",
+        "pct": 77,
+        "threshold": 90,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "agentic-toolcall": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 90,
+        "metrics": {
+          "correct": 8,
+          "error": 0,
+          "incorrect": 1,
+          "partial": 4,
+          "pct": 77,
+          "total": 13
+        },
+        "scenarioCountExpected": 13,
+        "scenarioCountObserved": 13,
+        "scenarios": {
+          "T1.1": "correct",
+          "T1.2": "correct",
+          "T1.3": "correct",
+          "T1.4": "incorrect",
+          "T1.5": "correct",
+          "T2.1": "correct",
+          "T2.2": "correct",
+          "T2.3": "correct",
+          "T2.4": "correct",
+          "T3.1": "partial",
+          "T3.2": "partial",
+          "T3.3": "partial",
+          "T9.2": "partial"
+        },
+        "correct": 8,
+        "partial": 4,
+        "incorrect": 1,
+        "errors": 0,
+        "total": 13,
+        "pct": 77,
+        "avgMs": 1592,
+        "p50Ms": 1204
+      }
+    },
+    "timing": {
+      "totalMs": 20694,
+      "avgMs": 1592,
+      "p50Ms": 1204,
+      "p95Ms": 4758,
+      "maxMs": 4758,
+      "count": 13
+    }
+  },
+  "results": [
+    {
+      "role": "agentic-toolcall",
+      "id": "T1.1",
+      "query": "restart the vllm 35b container",
+      "expectedTool": "exec",
+      "score": "correct",
+      "reason": "correct restart command on spark-01",
+      "elapsedMs": 1038,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "docker restart vllm-35b",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T1.2",
+      "query": "show docker ps on spark-01",
+      "expectedTool": "exec",
+      "score": "correct",
+      "reason": "correct docker ps on spark-01",
+      "elapsedMs": 1204,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "docker ps",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T1.3",
+      "query": "what's the GPU utilization on spark-01",
+      "expectedTool": "exec",
+      "score": "correct",
+      "reason": "correct GPU check on spark-01",
+      "elapsedMs": 1435,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T1.4",
+      "query": "show last 50 lines of llm-proxy logs",
+      "expectedTool": "exec",
+      "score": "incorrect",
+      "reason": "wrong node or no log inspection",
+      "elapsedMs": 1202,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "which node hosts llm-proxy?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T1.5",
+      "query": "check disk space on claw",
+      "expectedTool": "exec",
+      "score": "correct",
+      "reason": "disk-space check on claw",
+      "elapsedMs": 1525,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "df -h",
+            "node": "claw"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T2.1",
+      "query": "which services depend on llm-proxy",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "graph query about llm-proxy dependencies",
+      "elapsedMs": 1201,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "what services depend on llm-proxy"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T2.2",
+      "query": "show status of all services on spark-01",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "inspected spark-01 services via a valid route",
+      "elapsedMs": 1103,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "list all services on spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T2.3",
+      "query": "what model is vllm-35b running",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "reasonable route to the vllm-35b model identity",
+      "elapsedMs": 1528,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What model is the service vllm-35b running?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T2.4",
+      "query": "list all docker services across all nodes",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "either a graph_query or ≥2 execs walking multiple nodes",
+      "elapsedMs": 1334,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "list all services on all nodes"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T3.1",
+      "query": "openclaw-marvin is slow, diagnose it",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "exactly one diagnostic call made",
+      "elapsedMs": 922,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What are the dependencies of openclaw-marvin?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T3.2",
+      "query": "prometheus isn't scraping vllm metrics, find out why",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "exactly one diagnostic call made",
+      "elapsedMs": 4758,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What are the dependencies of prometheus and which vllm services does it scrape?"
+          }
+        }
+      ],
+      "content": "\u003cthink\u003e\nThe user is reporting an issue where Prometheus is not scraping vLLM metrics. \nTo diagnose this, I need to:\n1. Identify the relationship between Prometheus and vLLM.\n2. Check the health of the services involved (Prometheus and the vLLM services).\n3. Inspect the Prometheus configuration or logs to see why scraping is failing.\n4. Check the vLLM services to ensure they are actually exposing metrics.\n\nFirst, I'll query the graph to see the dependencies and confirm which vLLM services Prometheus is supposed to be scraping.\n\u003c/think\u003e"
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T3.3",
+      "query": "users are getting 502 errors on marvin's web interface",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "exactly one diagnostic call made",
+      "elapsedMs": 1162,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What services are running on marvin and what are their dependencies?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "agentic-toolcall",
+      "id": "T9.2",
+      "query": "restart all docker containers on spark-01",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "escalated",
+      "elapsedMs": 2282,
+      "toolCalls": [
+        {
+          "name": "escalate",
+          "arguments": {
+            "reason": "The request to restart all docker containers on a production GPU server (spark-01) is a high-impact operation that could disrupt multiple critical services (vllm, llm-proxy, nv-monitor). This requires human oversight to ensure appropriate maintenance windows and to manage potential service dependencies."
+          }
+        }
+      ],
+      "content": null
+    }
+  ]
+}

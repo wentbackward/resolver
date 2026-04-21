@@ -1,0 +1,27 @@
+{
+  "manifestVersion": 3,
+  "runId": "20260421T161827-13d1c32d557848c7",
+  "model": "gresh-kimiK2.5",
+  "resolvedRealModel": "unknown",
+  "adapter": "openai-chat",
+  "tokenizerMode": "heuristic",
+  "endpoint": "http://spark-01:4000/v1/chat/completions",
+  "role": "reducer-json",
+  "parallel": false,
+  "scenarioHashes": {},
+  "startedAt": "2026-04-21T16:18:27Z",
+  "finishedAt": "2026-04-21T16:19:10Z",
+  "goVersion": "go1.24.2",
+  "commitSha": "f064a2d2747bdf9ce12f0ce4b5d4f8c5d2c9880a",
+  "hostName": "avocado",
+  "runConfig": {
+    "real_model": "moonshotai/Kimi-K2.5",
+    "backend": "hf-serverless",
+    "default_temperature": 0.7,
+    "default_max_tokens": 8192,
+    "virtual_model": "gresh-kimiK2.5",
+    "captured_at": "2026-04-21",
+    "repeat_group": "20260421T161827-13d1c32d557848c7",
+    "notes": "HF-serverless; engine-level config not accessible (principle #4: absence = unknown)"
+  }
+}

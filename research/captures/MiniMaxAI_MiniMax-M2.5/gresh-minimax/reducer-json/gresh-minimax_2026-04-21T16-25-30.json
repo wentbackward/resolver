@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "model": "gresh-minimax",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:25:30.307Z",
+    "queryCount": 4,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "reducer-json parse_validity \u003e= 0.90",
+        "pct": 100,
+        "threshold": 0.9,
+        "pass": true
+      }
+    ],
+    "roles": {
+      "reducer-json": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 0.9,
+        "metric": "parse_validity",
+        "metrics": {
+          "correct": 4,
+          "error": 0,
+          "incorrect": 0,
+          "parse_validity": 1,
+          "partial": 0,
+          "pct": 100,
+          "total": 4
+        },
+        "scenarioCountExpected": 4,
+        "scenarioCountObserved": 4,
+        "scenarios": {
+          "rj.blocked.1": "correct",
+          "rj.continue.1": "correct",
+          "rj.quote.1": "correct",
+          "rj.succeeded.1": "correct"
+        },
+        "correct": 4,
+        "partial": 0,
+        "incorrect": 0,
+        "errors": 0,
+        "total": 4,
+        "pct": 100,
+        "avgMs": 3108,
+        "p50Ms": 2468
+      }
+    },
+    "timing": {
+      "totalMs": 12432,
+      "avgMs": 3108,
+      "p50Ms": 2468,
+      "p95Ms": 5157,
+      "maxMs": 5157,
+      "count": 4
+    }
+  },
+  "results": [
+    {
+      "role": "reducer-json",
+      "id": "rj.blocked.1",
+      "query": "Reduce the following sshwarm event stream to a JSON summary:\n{\"event\":\"connecting\",\"host\":\"claw\",\"ts\":1}\n{\"event\":\"blocked\",\"host\":\"claw\",\"ts\":2,\"reason\":\"firewall\"}\n",
+      "expectedTool": "reduce",
+      "score": "correct",
+      "reason": "emitted valid JSON with host and reason fields",
+      "elapsedMs": 2091,
+      "toolCalls": [],
+      "content": "{\"status\":\"blocked\",\"envelope\":{\"host\":\"claw\",\"events\":[{\"event\":\"connecting\",\"ts\":1},{\"event\":\"blocked\",\"ts\":2,\"reason\":\"firewall\"}]},\"locality\":\"host:claw\",\"summary\":\"Connection to claw was blocked by firewall\"}"
+    },
+    {
+      "role": "reducer-json",
+      "id": "rj.continue.1",
+      "query": "Reduce the following sshwarm event stream to a JSON summary:\n{\"event\":\"connecting\",\"host\":\"spark-01\",\"ts\":1}\n{\"event\":\"connected\",\"host\":\"spark-01\",\"ts\":2}\n{\"event\":\"continue\",\"host\":\"spark-01\",\"ts\":3,\"msg\":\"keepalive ok\"}\n",
+      "expectedTool": "reduce",
+      "score": "correct",
+      "reason": "emitted valid JSON with host and event fields",
+      "elapsedMs": 2468,
+      "toolCalls": [],
+      "content": "{\"status\":\"continue\",\"envelope\":{\"events\":[{\"event\":\"connecting\",\"host\":\"spark-01\",\"ts\":1},{\"event\":\"connected\",\"host\":\"spark-01\",\"ts\":2},{\"event\":\"continue\",\"host\":\"spark-01\",\"ts\":3,\"msg\":\"keepalive ok\"}]},\"locality\":\"spark-01\",\"summary\":\"Connection to spark-01 established and keepalive confirmed\"}"
+    },
+    {
+      "role": "reducer-json",
+      "id": "rj.quote.1",
+      "query": "Reduce this event stream, preserving the quoted message field verbatim:\n{\"event\":\"warn\",\"host\":\"marvin\",\"ts\":1,\"msg\":\"disk \\\"almost\\\" full\"}\n",
+      "expectedTool": "reduce",
+      "score": "correct",
+      "reason": "valid JSON with msg field, quotes correctly escaped",
+      "elapsedMs": 2716,
+      "toolCalls": [],
+      "content": "{\"status\":\"succeeded\",\"envelope\":{\"event\":\"warn\",\"host\":\"marvin\",\"ts\":1,\"msg\":\"disk \\\"almost\\\" full\"},\"locality\":\"marvin\",\"summary\":\"Warning event processed for disk space on host marvin\"}"
+    },
+    {
+      "role": "reducer-json",
+      "id": "rj.succeeded.1",
+      "query": "Reduce the following sshwarm event stream to a JSON summary:\n{\"event\":\"connecting\",\"host\":\"fragola\",\"ts\":1}\n{\"event\":\"connected\",\"host\":\"fragola\",\"ts\":2}\n{\"event\":\"succeeded\",\"host\":\"fragola\",\"ts\":3,\"exit_code\":0}\n",
+      "expectedTool": "reduce",
+      "score": "correct",
+      "reason": "valid JSON with host and exit_code fields",
+      "elapsedMs": 5157,
+      "toolCalls": [],
+      "content": "{\"status\":\"succeeded\",\"envelope\":{\"host\":\"fragola\",\"exit_code\":0,\"events\":[{\"event\":\"connecting\",\"ts\":1},{\"event\":\"connected\",\"ts\":2},{\"event\":\"succeeded\",\"ts\":3,\"exit_code\":0}]},\"locality\":\"fragola\",\"summary\":\"SSH connection to fragola succeeded with exit code 0\"}"
+    }
+  ]
+}

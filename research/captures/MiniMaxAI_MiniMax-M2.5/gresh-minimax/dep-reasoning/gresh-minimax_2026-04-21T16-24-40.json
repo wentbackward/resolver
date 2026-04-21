@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "model": "gresh-minimax",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:24:40.073Z",
+    "queryCount": 3,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "dep-reasoning \u003e= 60%",
+        "pct": 100,
+        "threshold": 60,
+        "pass": true
+      }
+    ],
+    "roles": {
+      "dep-reasoning": {
+        "verdict": "PASS",
+        "thresholdMet": true,
+        "threshold": 60,
+        "metrics": {
+          "correct": 3,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 0,
+          "pct": 100,
+          "total": 3
+        },
+        "scenarioCountExpected": 3,
+        "scenarioCountObserved": 3,
+        "scenarios": {
+          "T10.1": "correct",
+          "T10.2": "correct",
+          "T10.3": "correct"
+        },
+        "correct": 3,
+        "partial": 0,
+        "incorrect": 0,
+        "errors": 0,
+        "total": 3,
+        "pct": 100,
+        "avgMs": 1634,
+        "p50Ms": 1865
+      }
+    },
+    "timing": {
+      "totalMs": 4901,
+      "avgMs": 1634,
+      "p50Ms": 1865,
+      "p95Ms": 1982,
+      "maxMs": 1982,
+      "count": 3
+    }
+  },
+  "results": [
+    {
+      "role": "dep-reasoning",
+      "id": "T10.1",
+      "query": "if I restart llm-proxy, what breaks?",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "dependency/impact graph query",
+      "elapsedMs": 1982,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What depends on llm-proxy?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "dep-reasoning",
+      "id": "T10.2",
+      "query": "what does openclaw-cortana depend on to function?",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "upstream/dependency graph query",
+      "elapsedMs": 1054,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What does openclaw-cortana depend on?"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "dep-reasoning",
+      "id": "T10.3",
+      "query": "is anything on claw affected if spark-01 goes offline?",
+      "expectedTool": "graph_query",
+      "score": "correct",
+      "reason": "impact graph query",
+      "elapsedMs": 1865,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What services on claw depend on spark-01?"
+          }
+        }
+      ],
+      "content": null
+    }
+  ]
+}

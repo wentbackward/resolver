@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "model": "gresh-minimax",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:25:19.184Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "multiturn \u003e= 60%",
+        "pct": 50,
+        "threshold": 60,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "multiturn": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 60,
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 0,
+          "partial": 1,
+          "pct": 50,
+          "total": 1
+        },
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "scenarios": {
+          "multiturn.progressive": "partial"
+        },
+        "correct": 0,
+        "partial": 1,
+        "incorrect": 0,
+        "errors": 0,
+        "total": 1,
+        "pct": 50,
+        "avgMs": 7025,
+        "p50Ms": 7025
+      }
+    },
+    "timing": {
+      "totalMs": 7025,
+      "avgMs": 7025,
+      "p50Ms": 7025,
+      "p95Ms": 7025,
+      "maxMs": 7025,
+      "count": 1
+    }
+  },
+  "results": [
+    {
+      "role": "multiturn",
+      "id": "multiturn.progressive",
+      "query": "I'm about to restart vllm-35b on spark-01. Before I do, I want you to confirm:\n(1) which services depend on it,\n(2) what command operators use to restart it, and\n(3) pass me back a safe `exec` call I can run. Use read_document to look up notes if you need them.\n",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "gathered context via mocks but never emitted restart exec",
+      "elapsedMs": 7025,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "vllm-35b dependencies"
+          }
+        },
+        {
+          "name": "read_document",
+          "arguments": {
+            "id": "notes"
+          }
+        },
+        {
+          "name": "read_document",
+          "arguments": {
+            "id": "claw-notes"
+          }
+        }
+      ],
+      "content": "Here you go:\n\n**(1) Dependencies**\n- **llm-proxy** (port 4000) — multiplexes traffic to vllm-35b (and vllm-8b/4b)\n- **prometheus** (via nv-monitor) — scrapes the 35B container directly\n- **grafana** — depends on prometheus, so indirectly affected\n\n**(2) Restart command (from operator notes)**\n```\ndocker restart vllm-35b\n```\n\n**(3) Safe exec call**\n```json\n{\n  \"node\": \"spark-01\",\n  \"command\": \"docker restart vllm-35b\"\n}\n```\n\n**Heads up from notes:** The 35B is memory-heavy. If it stalls \u003e45s during restart, kill it outright with `docker kill vllm-35b` and let the restart policy bring it up clean."
+    }
+  ]
+}

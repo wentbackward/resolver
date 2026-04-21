@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "model": "gresh-gemma4-moe",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:09:07.174Z",
+    "queryCount": 3,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "node-resolution \u003e= 60%",
+        "pct": 33,
+        "threshold": 60,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "node-resolution": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 60,
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 1,
+          "partial": 2,
+          "pct": 33,
+          "total": 3
+        },
+        "scenarioCountExpected": 3,
+        "scenarioCountObserved": 3,
+        "scenarios": {
+          "T8.1": "partial",
+          "T8.2": "incorrect",
+          "T8.3": "partial"
+        },
+        "correct": 0,
+        "partial": 2,
+        "incorrect": 1,
+        "errors": 0,
+        "total": 3,
+        "pct": 33,
+        "avgMs": 1806,
+        "p50Ms": 1826
+      }
+    },
+    "timing": {
+      "totalMs": 5418,
+      "avgMs": 1806,
+      "p50Ms": 1826,
+      "p95Ms": 2276,
+      "maxMs": 2276,
+      "count": 3
+    }
+  },
+  "results": [
+    {
+      "role": "node-resolution",
+      "id": "T8.1",
+      "query": "restart caddy",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "cautious but incomplete (graph_query only)",
+      "elapsedMs": 2276,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "which node runs caddy"
+          }
+        }
+      ],
+      "content": "\u003cthink\u003e\n\u003c/think\u003e"
+    },
+    {
+      "role": "node-resolution",
+      "id": "T8.2",
+      "query": "show prometheus logs",
+      "expectedTool": "exec",
+      "score": "incorrect",
+      "reason": "wrong node or not a log inspection",
+      "elapsedMs": 1316,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "which node runs prometheus"
+          }
+        }
+      ],
+      "content": "\u003cthink\u003e\n\u003c/think\u003e"
+    },
+    {
+      "role": "node-resolution",
+      "id": "T8.3",
+      "query": "how much memory is the VLM using",
+      "expectedTool": "exec",
+      "score": "partial",
+      "reason": "marvin exec with different command, or a graph_query",
+      "elapsedMs": 1826,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "which node runs vllm-vlm and what is its service name?"
+          }
+        }
+      ],
+      "content": "\u003cthink\u003e\n\u003c/think\u003e"
+    }
+  ]
+}

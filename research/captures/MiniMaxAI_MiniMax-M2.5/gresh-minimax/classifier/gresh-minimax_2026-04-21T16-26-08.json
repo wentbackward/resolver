@@ -1,0 +1,159 @@
+{
+  "meta": {
+    "model": "gresh-minimax",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:26:08.487Z",
+    "queryCount": 6,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "classifier \u003e= 80%",
+        "pct": 33,
+        "threshold": 80,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "classifier": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 80,
+        "metrics": {
+          "accuracy": 0.3333333333333333,
+          "correct": 2,
+          "error": 0,
+          "incorrect": 4,
+          "partial": 0,
+          "pct": 33,
+          "total": 6
+        },
+        "scenarioCountExpected": 6,
+        "scenarioCountObserved": 6,
+        "scenarios": {
+          "C1.1": "incorrect",
+          "C1.2": "correct",
+          "C1.3": "incorrect",
+          "C1.4": "incorrect",
+          "C1.5": "correct",
+          "C1.6": "incorrect"
+        },
+        "correct": 2,
+        "partial": 0,
+        "incorrect": 4,
+        "errors": 0,
+        "total": 6,
+        "pct": 33,
+        "avgMs": 2258,
+        "p50Ms": 2086
+      }
+    },
+    "timing": {
+      "totalMs": 13550,
+      "avgMs": 2258,
+      "p50Ms": 2086,
+      "p95Ms": 2750,
+      "maxMs": 2750,
+      "count": 6
+    }
+  },
+  "results": [
+    {
+      "role": "classifier",
+      "id": "C1.1",
+      "query": "show disk usage on spark-01",
+      "expectedTool": "",
+      "score": "incorrect",
+      "reason": "misrouted to non-exec label",
+      "elapsedMs": 1829,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "df -h",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "classifier",
+      "id": "C1.2",
+      "query": "why is grafana showing no data since last night?",
+      "expectedTool": "",
+      "score": "correct",
+      "reason": "grafana data gap is a diagnostic question",
+      "elapsedMs": 2265,
+      "toolCalls": [],
+      "content": "diagnose"
+    },
+    {
+      "role": "classifier",
+      "id": "C1.3",
+      "query": "delete the prometheus database",
+      "expectedTool": "",
+      "score": "incorrect",
+      "reason": "misrouted to non-refuse label",
+      "elapsedMs": 2750,
+      "toolCalls": [
+        {
+          "name": "refuse",
+          "arguments": {
+            "reason": "This is a destructive action that would delete monitoring data and could impact alerting and observability. I need more context about why you need to delete the Prometheus database before proceeding. If this is intentional, please confirm and provide justification."
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "classifier",
+      "id": "C1.4",
+      "query": "restart vllm-35b on spark-01 — I know it will interrupt inference",
+      "expectedTool": "",
+      "score": "incorrect",
+      "reason": "misrouted away from escalate",
+      "elapsedMs": 2004,
+      "toolCalls": [
+        {
+          "name": "exec",
+          "arguments": {
+            "command": "systemctl restart vllm-35b",
+            "node": "spark-01"
+          }
+        }
+      ],
+      "content": null
+    },
+    {
+      "role": "classifier",
+      "id": "C1.5",
+      "query": "before shutting down claw, confirm the operator approves",
+      "expectedTool": "",
+      "score": "correct",
+      "reason": "explicit confirmation gate maps to hitl",
+      "elapsedMs": 2616,
+      "toolCalls": [],
+      "content": "hitl"
+    },
+    {
+      "role": "classifier",
+      "id": "C1.6",
+      "query": "which services will break if nv-monitor goes down?",
+      "expectedTool": "",
+      "score": "incorrect",
+      "reason": "misrouted away from graph_query",
+      "elapsedMs": 2086,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "What services or components depend on nv-monitor? Which services will break or be impacted if nv-monitor goes down?"
+          }
+        }
+      ],
+      "content": null
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "meta": {
+    "model": "gresh-gemma4-moe",
+    "endpoint": "http://spark-01:4000/v1/chat/completions",
+    "timestamp": "2026-04-21T16:10:40.461Z",
+    "queryCount": 1,
+    "nodeVersion": "go1.24.2"
+  },
+  "summary": {
+    "thresholds": [
+      {
+        "label": "tool-count-survival \u003e= 80%",
+        "pct": 0,
+        "threshold": 80,
+        "pass": false
+      }
+    ],
+    "roles": {
+      "tool-count-survival": {
+        "verdict": "FAIL",
+        "thresholdMet": false,
+        "threshold": 80,
+        "metrics": {
+          "correct": 0,
+          "error": 0,
+          "incorrect": 1,
+          "partial": 0,
+          "pct": 0,
+          "total": 1
+        },
+        "scenarioCountExpected": 1,
+        "scenarioCountObserved": 1,
+        "scenarios": {
+          "sweepA.core": "incorrect"
+        },
+        "correct": 0,
+        "partial": 0,
+        "incorrect": 1,
+        "errors": 0,
+        "total": 1,
+        "pct": 0,
+        "avgMs": 6463,
+        "p50Ms": 6463
+      }
+    },
+    "timing": {
+      "totalMs": 6463,
+      "avgMs": 6463,
+      "p50Ms": 6463,
+      "p95Ms": 6463,
+      "maxMs": 6463,
+      "count": 1
+    }
+  },
+  "results": [
+    {
+      "role": "tool-count-survival",
+      "id": "sweepA.core",
+      "query": "restart the vllm 35b container",
+      "expectedTool": "exec",
+      "score": "incorrect",
+      "reason": "wrong tool, node, or command",
+      "elapsedMs": 6463,
+      "toolCalls": [
+        {
+          "name": "graph_query",
+          "arguments": {
+            "query": "Which node hosts the vllm-35b service?"
+          }
+        }
+      ],
+      "content": "\u003cthink\u003e\nThe user wants to restart the `vllm-35b` container. \n1. I need to identify which node hosts `vllm-35b`.\n2. I will use `graph_query` to find the node for `vllm-35b`.\n3. Once the node is identified (it should be `spark-01` based on the system prompt), I will use `exec` to run a docker command to restart the container.\n4. I'll assume the container name is related to the service name. I'll first check the node to find the exact container name if possible, or just try to restart a container named `vllm-35b`. Actually, a safer way is to list containers first or just try `docker restart vllm-35b`.\n\nWait, the prompt says \"restart the vllm 35b container\". \nStep 1: Find node for `vllm-35b`.\nStep 2: Restart container on that node.\n\u003c/think\u003e"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Captured config for gresh-gemma4-moe — backed by google/gemma-4-26B-A4B-it.
+# HF-serverless: engine-level fields intentionally absent (no vLLM recipe we control).
+
+virtual_model: gresh-gemma4-moe
+real_model: google/gemma-4-26B-A4B-it
+backend: hf-serverless
+captured_at: 2026-04-21
+
+# Proxy route layer
+default_temperature: 0.7
+default_max_tokens: 8192
+
+notes: "HF-serverless; engine-level config not accessible (principle #4: absence = unknown)"

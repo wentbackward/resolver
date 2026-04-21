@@ -1,0 +1,13 @@
+# Captured config for gresh-kimiK2.5 — backed by moonshotai/Kimi-K2.5.
+# HF-serverless: engine-level fields intentionally absent.
+
+virtual_model: gresh-kimiK2.5
+real_model: moonshotai/Kimi-K2.5
+backend: hf-serverless
+captured_at: 2026-04-21
+
+# Proxy route layer
+default_temperature: 0.7
+default_max_tokens: 8192
+
+notes: "HF-serverless; engine-level config not accessible (principle #4: absence = unknown)"
