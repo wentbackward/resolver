@@ -14,6 +14,50 @@ not about the model.
 
 ---
 
+## Cross-cutting requirements
+
+### Semantic-classification matchers (A/B regex vs small-classifier)
+
+**Requirement, not parked.** Regex is a weak proxy for the semantic
+question the harness actually wants to answer ("is this a refusal?",
+"does this command restart the right container?"). A small classifier
+LLM at `temperature=0` — running locally, ollama-sized — is better
+suited to fuzzy text questions. Structural checks (tool call exists,
+`node=spark-01`, JSON field present) stay as code; only the fuzzy
+slices get classified.
+
+**Rollout shape — run both in parallel.**
+
+- Every scenario whose matcher currently relies on regex against
+  free-text content gets a twin classifier matcher. Scorecards carry
+  both verdicts side-by-side: each scenario contributes a `T.1r`
+  regex-matcher verdict and a `T.1c` classifier-matcher verdict.
+- Same aggregation logic, different matcher engines — roles emit
+  `role(r)` and `role(c)` scores. No change to how percentages /
+  `parse_validity` / thresholds are computed.
+- When enough sweep evidence shows one matcher is reliably better
+  than the other for a specific scenario, drop the loser for that
+  scenario. Per-scenario decision, not wholesale replacement.
+
+**Non-negotiables when the classifier fires.**
+
+- **Pin the classifier.** Model name + weight hash (or ollama digest)
+  captured in the run manifest. A silent re-pull tomorrow shouldn't
+  shift verdicts invisibly.
+- **Classifier ≠ model-under-test instance.** Same family is OK, same
+  instance isn't — mirrors the existing reporter-vs-model-under-test
+  guard in `analyze report`.
+- **Calibration gold set.** A small labeled corpus of known outputs
+  (à la `test-refusal-time.sh`) rerun every sweep to confirm the
+  classifier still agrees with ground truth. Warn loudly if accuracy
+  drops below a threshold — gives us a tripwire when a new classifier
+  pull regresses.
+- **Persist classifier call + prompt + answer in the scorecard.**
+  Regex misses are self-explanatory; classifier misses need the
+  payload recorded so disagreements are auditable.
+
+---
+
 ## Still to walk through
 
 - safety-refuse
