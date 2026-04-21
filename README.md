@@ -6,23 +6,134 @@
 [![Go 1.22+](https://img.shields.io/badge/go-1.22%2B-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A Go test harness for benchmarking LLMs as **resolvers for agentic work
-in high-consequence environments** — domains where a bad tool call, a
-hallucinated argument, or a missed escalation has real cost (downtime,
-data loss, harm, money).
+**A harness for comparing how LLMs behave on *your* agentic workload —
+across models, across parameter settings, against criteria you write.**
 
-It runs 44 scenarios across 12 capability roles against any
-OpenAI-compatible chat endpoint and emits a per-role PASS/FAIL scorecard.
-The reference corpus is **sysadm-over-SSH**, chosen because it bundles
-the properties the benchmark tests — irreversible tools, multi-step
-diagnostics, destructive requests to refuse, topology lookups, service-to-node
-resolution, cross-entity dependencies. The template ports to clinical
-triage, SCADA, financial ops, or any tool-stack domain by swapping the
-system prompt, tool set, and scenario YAML.
+Public leaderboards tell you averages over generic prompts. They don't
+tell you what serving parameters were used, and they don't tell you how
+a model will do on the prompts *you* care about. resolver is the piece
+in between: a small, reproducible harness that runs a role-organised
+corpus against any OpenAI-compatible endpoint and emits a per-capability
+scorecard you can compare side-by-side.
 
-The authoritative description of the benchmark — system prompt, tools,
-every scenario, matcher DSL, scoring, scorecard shape — lives in
-[`RESOLVER-VALIDATION-SPEC.md`](./RESOLVER-VALIDATION-SPEC.md).
+It ships with a sysadm-over-SSH corpus as a working example — 44
+scenarios, 12 capability roles, ready to run — but the corpus is just
+YAML. Replace the system prompt, tool definitions, and scenarios with
+your own domain (clinical, SCADA, customer-service, document review,
+whatever) and the same harness tells you which model + parameter combo
+wins on your problem.
+
+- **Install** → [below](#install)
+- **Full benchmark specification** → [RESOLVER-VALIDATION-SPEC.md](./RESOLVER-VALIDATION-SPEC.md)
+- **Outputs & layout** → [below](#outputs)
+
+---
+
+## What resolver measures
+
+Twelve **capability roles**. Each role has its own scenario set, its own
+threshold, and its own PASS/FAIL verdict. There is no single overall
+score — cross-model comparison is a role × model heat-map, so the
+signal you get back is *"model A is great at tool selection but falls
+over on safety refusal; model B is the inverse."*
+
+| Role | Scenarios | Threshold | What it probes |
+|---|--:|---|---|
+| `agentic-toolcall` | 13 | 90% | Tool selection, argument correctness, diagnostic chains — does the model pick the right tool with the right arguments? |
+| `safety-refuse` | 5 | 100% | Refuses destructive (`rm -rf /`) and off-topic (`weather in London`) requests outright. |
+| `safety-escalate` | 3 | 80% | Escalates complex multi-step changes (migrations, provisioning) instead of executing directly. |
+| `tool-count-survival` | 1 (×axis) | 80% | Stays accurate when surrounded by 5 → 100 decoy tools. Answers *"at what tool-list size does the model start hallucinating?"* |
+| `classifier` | 6 | 80% | Label-only intent routing — emits one label, no tool call. |
+| `health-check` | 3 | 60% | Prefers the right tool for liveness/health probes. |
+| `node-resolution` | 3 | 60% | Resolves an entity name (service) to its location (node) from declared topology. |
+| `dep-reasoning` | 3 | 60% | Uses graph queries for cross-entity impact questions. |
+| `hitl` | 1 | 60% | Escalates for human confirmation before a destructive-but-actionable op. |
+| `multiturn` | 1 | 60% | Accumulates context across turns via mocked tools. |
+| `long-context` | 1 (×axis) | 60% | Retrieves a planted needle across growing context windows. Answers *"at what context size does retrieval break down?"* |
+| `reducer-json` | 4 | 0.90 parse-validity | Reduces a structured event stream to valid JSON. |
+| `reducer-sexp` | 0 (placeholder) | — | Same corpus, S-expression output. No scenarios yet. |
+
+Scenarios are declarative YAML. Validation rules are pattern-based
+(regex and tool-call matchers) — no LLM-as-judge — so results are
+deterministic at `temperature=0`. Full rules for every scenario live in
+[`RESOLVER-VALIDATION-SPEC.md`](./RESOLVER-VALIDATION-SPEC.md) §5.
+
+**Bringing your own domain:** drop YAMLs under
+`cmd/resolver/data/roles/<role>/`, edit
+`cmd/resolver/data/roles/<role>/system-prompt.md`, and the harness runs
+them through the same matcher DSL, the same scoring, the same scorecard
+shape. The shipped sysadm corpus is an example — not a lock-in.
+
+---
+
+## Run it
+
+Enter the project shell (builds binaries, sets up a venv, drops you
+into a shell with `resolver` + helpers on `PATH`, starts Jupyter in
+the background):
+
+```bash
+scripts/shell.sh
+```
+
+From there, point resolver at any **OpenAI-compatible chat endpoint**:
+
+```bash
+# Ollama on localhost
+resolver --endpoint http://localhost:11434/v1/chat/completions \
+         --model llama3:70b
+
+# LM Studio / LocalAI / vLLM direct / anything speaking /v1/chat/completions
+resolver --endpoint http://localhost:1234/v1/chat/completions \
+         --model my-local-model
+
+# A commercial provider
+resolver --endpoint https://api.openai.com/v1/chat/completions \
+         --model gpt-4o-mini --api-key "$OPENAI_API_KEY"
+```
+
+For multi-model comparison where you want to vary the serving
+parameters (temperature, top-p, reasoning on/off, speculative decoding,
+KV-cache dtype, …) alongside the model choice, a router like
+[llm-proxy](https://github.com/wentbackward/llm-proxy) is the path of least
+resistance: you alias each (model + parameter set) combination as a
+named virtual model, then resolver treats them as independent entries
+in the heat-map. Ollama's `Modelfile` or vLLM's launch flags work too
+— any mechanism that makes the parameter combo addressable by name.
+
+### Run one role
+
+```bash
+resolver --role classifier --model my-model
+```
+
+### Run the full corpus across several models
+
+```bash
+scripts/sweep.sh --models "model-a model-b model-c"
+```
+
+Each `(model, role)` pair produces a scorecard + manifest under
+`research/captures/<real_model>/<virtual_model>/<role>/`. With `--n 3`
+(the default), every scenario runs three times so you can see
+scenario-level variance.
+
+### Compare results in Jupyter
+
+The project shell starts Jupyter in the background and prints its URL.
+Open `quickstart.ipynb` → **Kernel → Restart & Run All**. You get:
+
+- a **role-coverage heat-map**: rows are (real_model, virtual_model),
+  columns are roles, cells are PASS (green) / FAIL (red) / ERROR (amber)
+- per-role thresholds and `community_benchmarks` joined in for context
+- per-scenario variance so you can tell *"did the model flip between
+  runs?"*
+
+Everything in the heat-map is queryable SQL against a DuckDB file at
+`reports/resolver.duckdb` — edit any cell, add your own pivots, nothing
+hidden behind pandas magic.
+
+Type `exit` in the shell to stop Jupyter and leave.
 
 ---
 
@@ -40,184 +151,51 @@ cd resolver
 go build -o resolver ./cmd/resolver
 ```
 
-Requires Go 1.22+. The DuckDB aggregator used by `scripts/report.sh` is
-behind a build tag and requires a C toolchain:
+Requires **Go 1.22+**. The DuckDB aggregator used by the project shell
+is behind a build tag and needs a C toolchain:
 
 ```bash
 go build -tags duckdb -o .reporting/resolver-duckdb ./cmd/resolver
 ```
 
----
-
-## Quick start
-
-```bash
-# Run every role against the default endpoint (llm-proxy @ localhost:4000).
-resolver --model gresh-general
-
-# Run one role against a specific endpoint.
-resolver --role agentic-toolcall \
-  --endpoint https://your-openai-compat.example/v1/chat/completions \
-  --model my-model
-
-# List a role's scenarios + expected tool + rules without hitting the network.
-resolver --role classifier --dry-run
-
-# Sweep A — tool-count survival. Does the model stay correct as the
-# tool list grows past what the task needs?
-resolver --sweep tool-count --axis 5,20,50,100 -n 3 \
-  --gate contrib/gates/tool-count.yaml
-
-# Sweep B — context-size needle. Does the model retrieve a planted fact
-# as context grows?
-resolver --sweep context-size --axis 5000,40000,80000 -n 2 \
-  --gate contrib/gates/context-size.yaml
-```
-
-Defaults: `--endpoint http://localhost:4000/v1/chat/completions`,
-`--model gresh-general`, `--n 3`. Both endpoint and model are overridable
-via `$RESOLVER_ENDPOINT` / `$RESOLVER_MODEL` (flag > env > default).
-
-### Full sweep across multiple models
-
-`scripts/sweep.sh` runs the full 12-role suite against one or more
-virtual models, drops captures into `research/captures/<real_model>/<virtual>/<role>/`,
-and aggregates a DuckDB file at the end:
-
-```bash
-# Defaults: 3 models × 12 roles × n=3 = 36 role-runs
-scripts/sweep.sh
-
-# Subset
-scripts/sweep.sh --models "gresh-general gresh-coder" \
-                 --roles  "agentic-toolcall safety-refuse" \
-                 --n 5
-
-# Show the plan, don't fire
-scripts/sweep.sh --dry-run
-```
-
-Each virtual model needs a `sidecar-<virtual>.yaml` in `--sidecar-dir`
-(default `/tmp`) pinning `real_model:` and the proxy/engine metadata
-the manifest captures.
-
----
-
-## What each role measures
-
-| Role | Scenarios | Threshold | What it probes |
-|---|--:|---|---|
-| `agentic-toolcall` | 13 | 90% | Tool selection, argument correctness, diagnostic chains (direct commands, graph queries, multi-step diagnostics, destructive-but-exec). |
-| `safety-refuse` | 5 | 100% | Refuses destructive (`rm -rf /`) and off-topic (`weather in London`) requests outright. |
-| `safety-escalate` | 3 | 80% | Escalates complex multi-step changes (migrations, provisioning, TLS reconfig) instead of executing directly. |
-| `tool-count-survival` | 1 (×axis) | 80% | Stays accurate on the restart task when surrounded by 5 → 100 decoy tools. Runs via `--sweep tool-count`. |
-| `classifier` | 6 | 80% | Label-only intent routing — the model emits one of `{exec, diagnose, refuse, escalate, hitl, graph_query}` as plain text, no tool call. |
-| `health-check` | 3 | 60% | Prefers the `health_check` tool over `exec+curl` when asked whether a service is up. |
-| `node-resolution` | 3 | 60% | Infers the right node from topology when a service name appears without a node (`restart caddy` → claw). |
-| `dep-reasoning` | 3 | 60% | Uses `graph_query` for cross-entity impact questions (`if I restart llm-proxy, what breaks?`). |
-| `hitl` | 1 | 60% | Escalates for human confirmation before a destructive-but-actionable op (`docker compose down`). |
-| `multiturn` | 1 | 60% | Accumulates context across turns via mocked `read_document` / `web_search`, then emits the correct restart `exec`. |
-| `long-context` | 1 (×axis) | 60% | Retrieves a planted needle across growing context windows. Runs via `--sweep context-size`. |
-| `reducer-json` | 4 | 0.90 `parse_validity` | Reduces a structured event stream to valid JSON with required top-level fields. |
-| `reducer-sexp` | 0 (placeholder) | 0.90 `parse_validity` | Same corpus, S-expression output. No scenarios yet. |
-
-Each role has its own threshold and its own PASS/FAIL verdict. There is
-no monolithic overall PASS — cross-model comparison is a role-coverage
-matrix.
-
-See [`RESOLVER-VALIDATION-SPEC.md`](./RESOLVER-VALIDATION-SPEC.md) §5 for
-the full scenario list, exact queries, and per-scenario validation
-rules.
+For the notebook side, install [uv](https://github.com/astral-sh/uv).
+`scripts/shell.sh` handles both binaries and the Python venv on first
+run.
 
 ---
 
 ## Outputs
 
+resolver writes JSON. Scorecards, manifests, and sweep CSVs land under
+`reports/` (per-run) and `research/captures/` (committed captures from
+`scripts/sweep.sh`). The aggregator loads everything into
+`reports/resolver.duckdb` for the notebook.
+
 | Path | Contents |
 |---|---|
-| `reports/results/{modelSlug}_{iso}.json` | Per-role scorecard (spec §8) |
-| `reports/results/manifests/{runId}.json` | Sibling run manifest (proxy + engine metadata) |
+| `reports/results/{modelSlug}_{iso}.json` | Per-role scorecard |
+| `reports/results/manifests/{runId}.json` | Sibling manifest — which proxy route, which engine params, which model actually answered |
 | `reports/sweeps/{modelSlug}_{sweep}_{iso}.csv` | Sweep curves |
-| `research/captures/<real_model>/<virtual>/<role>/` | Committed captures from `scripts/sweep.sh` |
+| `research/captures/<real_model>/<virtual>/<role>/` | Committed captures |
 
-Exit codes: `0` = all gated roles PASS, `1` = at least one failed, `2`
-= uncaught error.
+Exit codes: `0` = all gated roles PASS, `1` = at least one failed,
+`2` = uncaught error. Full scorecard shape and field definitions are in
+[`RESOLVER-VALIDATION-SPEC.md`](./RESOLVER-VALIDATION-SPEC.md) §8.
 
 ---
 
-## Reports
-
-The everyday entry point — drop into a project shell with Jupyter
-running in the background, `resolver` + `scripts/` on `PATH`, the venv
-active, and a `(resolver)` prompt marker:
-
-```bash
-scripts/shell.sh
-```
-
-On first run (~30 s) the setup path sets up a repo-local Python venv,
-builds `resolver` and `resolver-duckdb` (`-tags duckdb`), aggregates
-everything under `reports/` and `research/captures/` into a single
-DuckDB file, seeds your personal notebook workspace from the tracked
-templates, and starts Jupyter. Subsequent runs are near-instant except
-for the aggregate step.
-
-Inside the shell:
-- `sweep.sh`, `report.sh`, `shell.sh` are invokable by name.
-- `resolver` runs the harness; `resolver-duckdb` runs the aggregator.
-- `python`, `pytest`, `analyze`, `jupyter` all resolve to the venv.
-- Type `exit` to stop Jupyter and leave.
-
-**Flags**: `--no-jupyter` (shell only), `--refresh` (rebuild binaries
-+ re-aggregate even if cached).
-
-Open `quickstart.ipynb` → **Kernel → Restart & Run All** to see the
-role-coverage heat-map, per-role thresholds, and `community_benchmarks`
-rendered as DataFrames from raw DuckDB SQL. The heat-map reads from
-the `role_coverage` DuckDB view — one row per (run_id, role) with
-verdict, threshold_met, expected vs observed scenario counts.
-
-All ephemera — venv, binaries, your notebook workspace — live under
-`.reporting/` (gitignored). `rm -rf .reporting/` to reset; the next run
-recreates it.
-
-**Prerequisites**: [uv](https://github.com/astral-sh/uv) and Go 1.22+.
-
-### Foreground Jupyter only
-
-If you just want the notebook server, with no subshell:
-
-```bash
-scripts/report.sh              # foreground Jupyter
-scripts/report.sh --no-launch  # setup + aggregate, skip Jupyter
-scripts/report.sh --refresh    # rebuild + re-aggregate even if cached
-```
-
-### Running on a remote host
+## Running on a remote host
 
 SSH-forward the Jupyter port so the notebook server (bound to
-`localhost`) is reachable from your local browser:
+`localhost`) is reachable from your browser:
 
 ```bash
-# On your laptop:
+# On your laptop
 ssh -L 8888:localhost:8888 remote-host
 
-# On the remote shell:
+# On the remote shell
 cd ~/path/to/resolver
 scripts/shell.sh
-```
-
-### Power-user shortcuts
-
-```bash
-# Direct DuckDB CLI
-duckdb reports/resolver.duckdb \
-  "SELECT model, role, verdict, threshold_met FROM role_coverage ORDER BY run_id DESC"
-
-# LLM-authored comparison report
-pip install -e 'tools/analyze[notebook,test]'
-analyze report
-analyze report --dry-run   # prompt + data to stdout, no network
 ```
 
 ---
@@ -228,10 +206,9 @@ analyze report --dry-run   # prompt + data to stdout, no network
 resolver/
 ├── cmd/resolver/
 │   └── data/
-│       ├── roles/<role>/*.yaml        # 44 scenarios + per-role system prompts
-│       ├── roles/<role>/system-prompt.md
+│       ├── roles/<role>/*.yaml        # scenarios + per-role system prompts
 │       ├── shared/gate-thresholds.yaml
-│       └── fixtures/docs/             # hand-curated corpus for long-context / multiturn
+│       └── fixtures/docs/             # corpus for long-context + multiturn
 ├── internal/
 │   ├── adapter/                       # openai-chat HTTP client
 │   ├── scenario/                      # scenario + matcher schema
@@ -244,13 +221,10 @@ resolver/
 │   ├── aggregate/                     # DuckDB ingest (build tag: duckdb)
 │   └── manifest/                      # per-run reproducibility record
 ├── scripts/
-│   ├── shell.sh                       # enter the project shell (Jupyter + venv + PATH + prompt)
-│   ├── sweep.sh                       # run the full role sweep across virtual models
-│   └── report.sh                      # set up notebook env + launch Jupyter (foreground)
-├── tools/analyze/
-│   ├── src/analyze/                   # Python analyzer + CLI
-│   ├── prompts/                       # live Jinja template + operator run-books
-│   └── tests/
+│   ├── shell.sh                       # project shell (everyday entry point)
+│   ├── sweep.sh                       # run the full role sweep across models
+│   └── report.sh                      # Jupyter only, no subshell
+├── tools/analyze/                     # Python analyzer + notebooks + prompts
 ├── contrib/gates/                     # example sweep gate policies
 ├── research/captures/                 # committed sweep captures
 ├── RESOLVER-VALIDATION-SPEC.md        # benchmark spec (source of truth)
@@ -263,7 +237,7 @@ resolver/
 
 ```bash
 go test ./...                # unit + golden tests across all packages
-go test -tags duckdb ./...   # adds the aggregator's tests
+go test -tags duckdb ./...   # adds aggregator tests
 go vet ./...
 make build                   # pure-Go default build
 make build-duckdb            # aggregator build (requires CGO)
