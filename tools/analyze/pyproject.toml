@@ -43,6 +43,7 @@ test = [
   "pytest>=8.0",
   "pytest-mock>=3.12",
   "respx>=0.21",   # httpx mock transport
+  "nbformat>=5.9", # test_notebooks.py parses committed .ipynb files
 ]
 
 [project.scripts]
