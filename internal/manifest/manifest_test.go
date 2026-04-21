@@ -15,8 +15,8 @@ func ptrI(v int) *int         { return &v }
 func ptrF(v float64) *float64 { return &v }
 
 func TestSchemaVersionBumped(t *testing.T) {
-	if manifest.SchemaVersion != 3 {
-		t.Errorf("SchemaVersion = %d, want 3 per v2.1 Phase 4", manifest.SchemaVersion)
+	if manifest.SchemaVersion != 4 {
+		t.Errorf("SchemaVersion = %d, want 4 (classifier-matcher foundation bump)", manifest.SchemaVersion)
 	}
 }
 
@@ -77,8 +77,8 @@ notes: "test sidecar"
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ManifestVersion != 3 {
-		t.Errorf("ManifestVersion on disk = %d, want 3", got.ManifestVersion)
+	if got.ManifestVersion != 4 {
+		t.Errorf("ManifestVersion on disk = %d, want 4", got.ManifestVersion)
 	}
 	if got.RunConfig == nil {
 		t.Fatal("runConfig was not serialized to disk")
@@ -159,8 +159,8 @@ func TestManifest_V3Shape(t *testing.T) {
 	if err := json.Unmarshal(raw, &asMap); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := asMap["manifestVersion"].(float64); int(got) != 3 {
-		t.Errorf("manifestVersion: got %v, want 3", asMap["manifestVersion"])
+	if got, _ := asMap["manifestVersion"].(float64); int(got) != 4 {
+		t.Errorf("manifestVersion: got %v, want 4", asMap["manifestVersion"])
 	}
 	if got, _ := asMap["role"].(string); got != "agentic-toolcall" {
 		t.Errorf("role: got %q, want agentic-toolcall", got)

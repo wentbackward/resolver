@@ -11,7 +11,11 @@ package aggregate
 //	    `runs` for archival readers, but NULL on v2.1 rows). Aggregator
 //	    ingests only manifestVersion == 3; v1/v2 manifests are rejected
 //	    with ErrUnsupportedSchema.
-const schemaVersion = 2
+//	v3: classifier-matcher foundation. Adds classifier_* columns to runs;
+//	    ALTER TABLE migration handled in migrate(). Aggregator accepts
+//	    manifestVersion 3 and 4 (v3 manifests pre-date classifier fields;
+//	    absent classifier_* fields write NULL).
+const schemaVersion = 3
 
 // ddl holds the CREATE statements. Run at first-open; idempotent. Keep
 // declarations conservative — `run_config` carries mostly nullable
@@ -50,7 +54,14 @@ var ddl = []string{
 		correct_count       INTEGER,
 		partial_count       INTEGER,
 		incorrect_count     INTEGER,
-		error_count         INTEGER
+		error_count         INTEGER,
+		-- v4 classifier metadata (NULL when classifierDisabled or pre-v4 manifest)
+		classifier_model         VARCHAR,
+		classifier_weight_digest VARCHAR,
+		classifier_endpoint      VARCHAR,
+		classifier_prompt_ref    VARCHAR,
+		classifier_prompt_hash   VARCHAR,
+		classifier_disabled      BOOLEAN
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS queries (
