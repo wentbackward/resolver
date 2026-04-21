@@ -179,7 +179,7 @@ def seeded_db(tmp_path: Path) -> Path:
 @pytest.fixture
 def prompt_template(tmp_path: Path) -> Path:
     """A minimal Jinja template — the real one lives at
-    docs/prompts/compare-models.md but tests use a trimmed local copy so
+    tools/analyze/prompts/compare-models.md but tests use a trimmed local copy so
     they don't depend on the repo layout being set up."""
     p = tmp_path / "compare.md"
     p.write_text(

@@ -5,7 +5,7 @@
 
 # Reports are ephemeral per-run — except the canonical community-benchmarks
 # YAML, which is hand-maintained append-only reference data (see
-# docs/community-benchmarks-schema.md). Note: re-including a child of an
+# docs/archive/community-benchmarks-schema.md). Note: re-including a child of an
 # ignored directory only works if the directory itself isn't excluded —
 # hence /reports/* (contents) rather than /reports/ (the dir).
 /reports/*

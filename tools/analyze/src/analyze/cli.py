@@ -60,7 +60,7 @@ def report(
     template: Path = typer.Option(
         Path(DEFAULT_PROMPT_TEMPLATE),
         "--template",
-        help="Jinja prompt template. Default: docs/prompts/compare-models.md.",
+        help="Jinja prompt template. Default: tools/analyze/prompts/compare-models.md.",
     ),
     dry_run: bool = typer.Option(
         False,

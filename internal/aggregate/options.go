@@ -4,7 +4,7 @@
 // in the default (no-tag) build so the `resolver aggregate` subcommand
 // can report a clean error without requiring CGO.
 //
-// See docs/adr/0002-duckdb-behind-build-tag.md and docs/build.md.
+// See docs/archive/adr/0002-duckdb-behind-build-tag.md and docs/archive/build.md.
 package aggregate
 
 // Options is the common call surface for aggregate.Run, present in both

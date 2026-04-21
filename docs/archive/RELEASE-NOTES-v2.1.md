@@ -41,7 +41,7 @@ capture.
   of the role's system prompt, stable across commits so long as the prompt
   text doesn't change). `MinP` is now captured in the `RunConfig` sidecar —
   reasoner-style engine clamps no longer silently lose reproducibility. See
-  [`docs/manifest-schema.md`](./docs/manifest-schema.md).
+  [`docs/archive/manifest-schema.md`](./manifest-schema.md).
 - **`--n` default flips 1 → 3.** Captures are now triple-run by default.
   Override with `--n 1` for a fast single pass.
 - **`--role <name>` CLI flag.** Runs a single role in isolation —

@@ -40,7 +40,7 @@ func readCapped(path string, limit int64) ([]byte, error) {
 }
 
 // SchemaVersion tracks breaking changes to the manifest shape. Bump when a
-// downstream consumer would have to care. See docs/manifest-schema.md.
+// downstream consumer would have to care. See docs/archive/manifest-schema.md.
 //
 //   v1: initial release (runId, model, adapter, tokenizerMode, seeds,
 //       scenarioHashes, timestamps, goVersion, commitSha, hostName).

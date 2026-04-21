@@ -57,7 +57,7 @@ Three reliable routes:
 1. **Hand-edit** the YAML with a new entry. Include the `source_url` and
    today's `as_of`. The aggregator's lint will catch typos.
 2. **AI-assisted refresh** — follow
-   [`docs/prompts/scrape-community-benchmarks.md`](prompts/scrape-community-benchmarks.md)
+   [`tools/analyze/prompts/scrape-community-benchmarks.md`](../../tools/analyze/prompts/scrape-community-benchmarks.md)
    with an AI CLI (Claude Code, Codex, etc.). The prompt walks the AI
    through discovering current values on official leaderboards and
    appending rows.

@@ -1,7 +1,7 @@
 """Render the comparison prompt and (optionally) ask an LLM to author an
 opinionated analysis of the aggregated data.
 
-The prompt template lives at docs/prompts/compare-models.md (Jinja). The
+The prompt template lives at tools/analyze/prompts/compare-models.md (Jinja). The
 reporter-LLM call goes to any OpenAI-compatible chat endpoint — default
 is the llm-proxy's `gresh-general`, overridable via --reporter-model /
 --endpoint.
@@ -35,7 +35,7 @@ DEFAULT_ENDPOINT = os.environ.get(
     "RESOLVER_REPORTER_ENDPOINT",
     "http://localhost:4000/v1/chat/completions",
 )
-DEFAULT_PROMPT_TEMPLATE = "docs/prompts/compare-models.md"
+DEFAULT_PROMPT_TEMPLATE = "tools/analyze/prompts/compare-models.md"
 REPORTER_TIMEOUT_S = 60.0
 
 

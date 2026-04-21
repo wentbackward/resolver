@@ -4,7 +4,7 @@
 #   - default (CGO-free): `go build ./...` → pure-Go `resolver` binary.
 #     The `aggregate` subcommand stubs out with an actionable error.
 #   - with -tags duckdb (CGO): `go build -tags duckdb ./...` → adds the
-#     DuckDB aggregator. Requires a C toolchain + libc. See docs/build.md.
+#     DuckDB aggregator. Requires a C toolchain + libc. See docs/archive/build.md.
 
 .PHONY: build build-duckdb build-all test test-duckdb test-all vet fmt clean
 

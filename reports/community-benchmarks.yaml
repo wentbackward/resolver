@@ -6,8 +6,8 @@
 # `community_benchmarks` table is truncate-and-reloaded from this file
 # each run — the table is a derived mirror, this file is canonical.
 #
-# Schema + contribution workflow: docs/community-benchmarks-schema.md
-# AI-driven refresh protocol:       docs/prompts/scrape-community-benchmarks.md
+# Schema + contribution workflow: docs/archive/community-benchmarks-schema.md
+# AI-driven refresh protocol:       tools/analyze/prompts/scrape-community-benchmarks.md
 #
 # ==================================================================
 # SEED DATA NOTICE

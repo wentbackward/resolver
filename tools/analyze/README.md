@@ -68,7 +68,7 @@ tools/analyze/
 ```
 
 The prompt template lives at
-[`docs/prompts/compare-models.md`](../../docs/prompts/compare-models.md)
+[`tools/analyze/prompts/compare-models.md`](prompts/compare-models.md)
 (version-controlled so "opinionated" is inspectable + tunable without
 code changes).
 
