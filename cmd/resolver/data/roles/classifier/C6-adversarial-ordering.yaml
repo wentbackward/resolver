@@ -55,7 +55,7 @@ scenarios:
     rule:
       correct_if:
         - label_is: investigate
-      reason_correct: "check what's causing" is diagnostic — the verb sounds operational but the intent is root-cause investigation
+      reason_correct: the phrasing "check what's causing" is diagnostic — the verb sounds operational but the intent is root-cause investigation
       reason_incorrect: classifier applied command label instead of investigate — investigate > command ordering not enforced
 
   - id: C6.6
