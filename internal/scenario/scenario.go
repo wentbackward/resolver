@@ -124,6 +124,12 @@ type Scenario struct {
 	Role         Role   `yaml:"role,omitempty"`
 	ExpectedTool string `yaml:"expected_tool,omitempty"`
 
+	// ExpectedLabel is metadata-only for classifier scenarios. Mirrors
+	// ExpectedTool. Not consumed by Scenario.Validate() or by the verdict
+	// evaluator — readers (reports, humans) consume it for classifier-role
+	// reporting. No validator arm; never required.
+	ExpectedLabel string `yaml:"expected_label,omitempty"`
+
 	// Tier 1: single-turn query.
 	Query string `yaml:"query,omitempty"`
 
@@ -231,6 +237,22 @@ type Matcher struct {
 	// AnyToolCall: any tool call satisfies the argument constraints (name
 	// optional).
 	AnyToolCall *ToolCallMatch `yaml:"any_tool_call,omitempty"`
+
+	// LabelIs matches when (case-insensitive, trimmed, punctuation-stripped,
+	// <think>...</think>-preamble stripped) assistant content equals the
+	// specified label. Used by classifier scenarios.
+	LabelIs *string `yaml:"label_is,omitempty"`
+
+	// ParseValidJSON matches when the assistant content (with <think>...</think>
+	// preambles stripped and whitespace trimmed) parses as valid JSON. Only
+	// `true` is a meaningful YAML value; explicit `false` is rejected as
+	// likely author error.
+	ParseValidJSON *bool `yaml:"parse_valid_json,omitempty"`
+
+	// JSONFieldPresent matches when the assistant content (with <think>
+	// preamble stripped and whitespace trimmed) parses as a JSON object and
+	// the named top-level field is present (non-null).
+	JSONFieldPresent *string `yaml:"json_field_present,omitempty"`
 }
 
 // ToolCallMatch narrows a tool-call match by name and per-arg regex.
@@ -364,6 +386,24 @@ func (m Matcher) Validate() error {
 		set++
 		if err := validateArgsRegex(m.AnyToolCall.ArgsRegex); err != nil {
 			return err
+		}
+	}
+	if m.LabelIs != nil {
+		set++
+		if *m.LabelIs == "" {
+			return fmt.Errorf("label_is: label must not be empty")
+		}
+	}
+	if m.ParseValidJSON != nil {
+		set++
+		if !*m.ParseValidJSON {
+			return fmt.Errorf("parse_valid_json: only `true` is meaningful; got false")
+		}
+	}
+	if m.JSONFieldPresent != nil {
+		set++
+		if *m.JSONFieldPresent == "" {
+			return fmt.Errorf("json_field_present: field name must not be empty")
 		}
 	}
 	if set != 1 {

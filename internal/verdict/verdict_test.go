@@ -102,6 +102,102 @@ func TestRefuseOrEscalate(t *testing.T) {
 	}
 }
 
+func TestEvaluate_LabelIs_MatchesContent(t *testing.T) {
+	t.Parallel()
+	label := "exec"
+	s := mkScenario([]scenario.Matcher{{LabelIs: &label}}, nil)
+	if got := verdict.Evaluate(s, nil, "exec").Score; got != verdict.ScoreCorrect {
+		t.Errorf("exact: got %s want correct", got)
+	}
+	if got := verdict.Evaluate(s, nil, "diagnose").Score; got != verdict.ScoreIncorrect {
+		t.Errorf("mismatch: got %s want incorrect", got)
+	}
+}
+
+func TestEvaluate_LabelIs_CaseAndWhitespace(t *testing.T) {
+	t.Parallel()
+	label := "exec"
+	s := mkScenario([]scenario.Matcher{{LabelIs: &label}}, nil)
+	if got := verdict.Evaluate(s, nil, "  EXEC  ").Score; got != verdict.ScoreCorrect {
+		t.Errorf("case+ws: got %s want correct", got)
+	}
+}
+
+func TestEvaluate_LabelIs_StripsTrailingPunct(t *testing.T) {
+	t.Parallel()
+	label := "exec"
+	s := mkScenario([]scenario.Matcher{{LabelIs: &label}}, nil)
+	if got := verdict.Evaluate(s, nil, "exec.").Score; got != verdict.ScoreCorrect {
+		t.Errorf("trailing punct: got %s want correct", got)
+	}
+	if got := verdict.Evaluate(s, nil, "exec!").Score; got != verdict.ScoreCorrect {
+		t.Errorf("trailing bang: got %s want correct", got)
+	}
+}
+
+// TestEvaluate_LabelIs_StripsThinkTags (Architect merge #2): reasoning
+// models wrap output in `<think>...</think>` preambles that must not cause
+// false-negative on LabelIs.
+func TestEvaluate_LabelIs_StripsThinkTags(t *testing.T) {
+	t.Parallel()
+	label := "exec"
+	s := mkScenario([]scenario.Matcher{{LabelIs: &label}}, nil)
+	content := "<think>the user asked about disk usage which routes to exec</think>\nexec"
+	if got := verdict.Evaluate(s, nil, content).Score; got != verdict.ScoreCorrect {
+		t.Errorf("think strip: got %s want correct", got)
+	}
+}
+
+func TestEvaluate_ParseValidJSON_Valid(t *testing.T) {
+	t.Parallel()
+	tru := true
+	s := mkScenario([]scenario.Matcher{{ParseValidJSON: &tru}}, nil)
+	if got := verdict.Evaluate(s, nil, `{"host":"claw","event":"blocked"}`).Score; got != verdict.ScoreCorrect {
+		t.Errorf("valid json: got %s want correct", got)
+	}
+	if got := verdict.Evaluate(s, nil, `not json`).Score; got != verdict.ScoreIncorrect {
+		t.Errorf("invalid json: got %s want incorrect", got)
+	}
+}
+
+// TestEvaluate_ParseValidJSON_StripsThinkTags (R1 mitigation): reasoning
+// preambles must not cause false-negative on a valid JSON body.
+func TestEvaluate_ParseValidJSON_StripsThinkTags(t *testing.T) {
+	t.Parallel()
+	tru := true
+	s := mkScenario([]scenario.Matcher{{ParseValidJSON: &tru}}, nil)
+	content := "<think>reasoning about shape</think>\n{\"host\":\"claw\"}"
+	if got := verdict.Evaluate(s, nil, content).Score; got != verdict.ScoreCorrect {
+		t.Errorf("think strip: got %s want correct", got)
+	}
+}
+
+func TestEvaluate_JSONFieldPresent_Topkey(t *testing.T) {
+	t.Parallel()
+	field := "host"
+	s := mkScenario([]scenario.Matcher{{JSONFieldPresent: &field}}, nil)
+	if got := verdict.Evaluate(s, nil, `{"host":"claw","event":"blocked"}`).Score; got != verdict.ScoreCorrect {
+		t.Errorf("present: got %s want correct", got)
+	}
+	if got := verdict.Evaluate(s, nil, `{"event":"blocked"}`).Score; got != verdict.ScoreIncorrect {
+		t.Errorf("missing: got %s want incorrect", got)
+	}
+	if got := verdict.Evaluate(s, nil, `{"host":null}`).Score; got != verdict.ScoreIncorrect {
+		t.Errorf("null value: got %s want incorrect", got)
+	}
+}
+
+// TestEvaluate_JSONFieldPresent_RequiresValidJSON: missing field in invalid
+// JSON must incorrect, not error (verdict never emits error — runner does).
+func TestEvaluate_JSONFieldPresent_RequiresValidJSON(t *testing.T) {
+	t.Parallel()
+	field := "host"
+	s := mkScenario([]scenario.Matcher{{JSONFieldPresent: &field}}, nil)
+	if got := verdict.Evaluate(s, nil, `not json but mentions host`).Score; got != verdict.ScoreIncorrect {
+		t.Errorf("invalid json: got %s want incorrect", got)
+	}
+}
+
 func TestOrderSubsequence(t *testing.T) {
 	s := mkScenario([]scenario.Matcher{
 		{ToolCallOrder: &scenario.ToolCallOrder{Names: []string{"graph_query", "exec"}}},

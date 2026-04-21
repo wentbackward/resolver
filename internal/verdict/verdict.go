@@ -5,6 +5,7 @@
 package verdict
 
 import (
+	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
@@ -70,8 +71,61 @@ func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string) bool
 		return regexMatchesTarget(*m.RegexMatch, calls, content)
 	case m.AnyToolCall != nil:
 		return hasToolCallMatch(calls, *m.AnyToolCall)
+	case m.LabelIs != nil:
+		return labelMatches(content, *m.LabelIs)
+	case m.ParseValidJSON != nil:
+		if !*m.ParseValidJSON {
+			return false
+		}
+		return json.Valid([]byte(stripThinkAndTrim(content)))
+	case m.JSONFieldPresent != nil:
+		return jsonFieldPresent(content, *m.JSONFieldPresent)
 	}
 	return false
+}
+
+// thinkTagRe matches reasoning-model `<think>...</think>` preambles. Must be
+// multi-line (the body can span several lines) and non-greedy (models can
+// emit more than one preamble).
+var thinkTagRe = regexp.MustCompile(`(?s)<think>.*?</think>`)
+
+// stripThinkAndTrim removes `<think>...</think>` preambles from reasoning
+// models and trims surrounding whitespace. Shared by LabelIs, ParseValidJSON,
+// and JSONFieldPresent so reasoning-model captures don't false-negative.
+func stripThinkAndTrim(content string) string {
+	return strings.TrimSpace(thinkTagRe.ReplaceAllString(content, ""))
+}
+
+// labelPunctRe matches trailing punctuation a classifier model may append to
+// its single-label output (e.g. `"exec."`, `"diagnose!"`).
+var labelPunctRe = regexp.MustCompile(`[\s\p{P}]+$`)
+
+// labelMatches returns true when, after stripping <think> preambles,
+// surrounding whitespace, trailing punctuation, and lowercasing, the
+// assistant content equals the configured label (also lowercased).
+func labelMatches(content, label string) bool {
+	norm := strings.ToLower(stripThinkAndTrim(content))
+	norm = labelPunctRe.ReplaceAllString(norm, "")
+	want := strings.ToLower(strings.TrimSpace(label))
+	return norm == want
+}
+
+// jsonFieldPresent returns true when the assistant content parses as a JSON
+// object and the named top-level field is present with a non-null value.
+func jsonFieldPresent(content, field string) bool {
+	body := stripThinkAndTrim(content)
+	if !json.Valid([]byte(body)) {
+		return false
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &obj); err != nil {
+		return false
+	}
+	raw, ok := obj[field]
+	if !ok {
+		return false
+	}
+	return string(raw) != "null"
 }
 
 // hasToolCallMatch: at least one call matches the name (if given) and every
