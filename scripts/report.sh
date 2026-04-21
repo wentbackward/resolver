@@ -10,11 +10,12 @@
 #
 # Usage:
 #   scripts/report.sh             # full run: setup + aggregate + launch Jupyter (foreground)
-#   scripts/report.sh --shell     # Jupyter in background + venv-activated subshell;
-#                                 # type 'exit' to stop Jupyter and return
 #   scripts/report.sh --no-launch # stop before launching Jupyter (for CI / smoke tests)
 #   scripts/report.sh --refresh   # rebuild binary + re-aggregate even if cached
 #   scripts/report.sh --help      # print this message
+#
+# For the project shell (Jupyter in background + interactive shell with
+# resolver + scripts on PATH + (resolver) prompt), use scripts/shell.sh.
 
 set -euo pipefail
 
@@ -26,17 +27,13 @@ VENV="$REPORTING/venv"
 BIN="$REPORTING/resolver-duckdb"
 NBDIR="$REPORTING/notebooks"
 DB="reports/resolver.duckdb"
-PIDFILE="$REPORTING/jupyter.pid"
-LOGFILE="$REPORTING/jupyter.log"
 
 NO_LAUNCH=0
 REFRESH=0
-SHELL_MODE=0
 for arg in "$@"; do
   case "$arg" in
     --no-launch) NO_LAUNCH=1 ;;
     --refresh)   REFRESH=1 ;;
-    --shell)     SHELL_MODE=1 ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -49,25 +46,7 @@ for arg in "$@"; do
   esac
 done
 
-if [[ "$SHELL_MODE" -eq 1 && "$NO_LAUNCH" -eq 1 ]]; then
-  echo "ERROR: --shell and --no-launch are mutually exclusive." >&2
-  exit 2
-fi
-
 mkdir -p "$REPORTING" "$NBDIR"
-
-# Safety net: clean up a stale jupyter pid from a prior --shell run that
-# crashed without the EXIT trap firing.
-if [[ -f "$PIDFILE" ]]; then
-  oldpid=$(cat "$PIDFILE" 2>/dev/null || echo 0)
-  if [[ "${oldpid:-0}" -gt 0 ]] && kill -0 "$oldpid" 2>/dev/null; then
-    echo "==> killing stale jupyter (pid $oldpid) from prior run..."
-    kill "$oldpid" 2>/dev/null || true
-    sleep 0.5
-    kill -9 "$oldpid" 2>/dev/null || true
-  fi
-  rm -f "$PIDFILE"
-fi
 
 # 1. Python venv (one-time, unless deleted)
 if [[ ! -x "$VENV/bin/jupyter" ]]; then
@@ -102,7 +81,7 @@ for src in tools/analyze/notebooks/*.ipynb; do
   fi
 done
 
-# 5a. --no-launch: done.
+# 5. --no-launch: done.
 if [[ "$NO_LAUNCH" -eq 1 ]]; then
   echo ""
   echo "==> setup complete (--no-launch). To open Jupyter manually:"
@@ -110,59 +89,7 @@ if [[ "$NO_LAUNCH" -eq 1 ]]; then
   exit 0
 fi
 
-# 5b. --shell: background Jupyter + venv-activated subshell + trap cleanup.
-if [[ "$SHELL_MODE" -eq 1 ]]; then
-  cleanup() {
-    local code=$?
-    if [[ -f "$PIDFILE" ]]; then
-      local pid
-      pid=$(cat "$PIDFILE" 2>/dev/null || echo 0)
-      if [[ "${pid:-0}" -gt 0 ]] && kill -0 "$pid" 2>/dev/null; then
-        echo ""
-        echo "==> stopping jupyter (pid $pid)..."
-        kill "$pid" 2>/dev/null || true
-        sleep 0.5
-        kill -9 "$pid" 2>/dev/null || true
-      fi
-      rm -f "$PIDFILE"
-    fi
-    exit $code
-  }
-  trap cleanup EXIT INT TERM
-
-  echo "==> starting jupyter in background (log: $LOGFILE)..."
-  : > "$LOGFILE"
-  "$VENV/bin/jupyter" notebook --notebook-dir="$NBDIR" --no-browser > "$LOGFILE" 2>&1 &
-  echo $! > "$PIDFILE"
-
-  # Wait up to 6s for jupyter to print its URL.
-  for _ in $(seq 1 30); do
-    if grep -qE 'http://[^[:space:]]+' "$LOGFILE" 2>/dev/null; then
-      break
-    fi
-    sleep 0.2
-  done
-
-  echo ""
-  echo "==> jupyter URLs:"
-  grep -oE 'http://[^[:space:]]+' "$LOGFILE" | sort -u | sed 's/^/    /' || \
-    echo "    (URL not yet in log — tail $LOGFILE)"
-  echo ""
-  echo "==> launching venv-activated subshell"
-  echo "    python / pytest / analyze all point at $VENV/"
-  echo "    type 'exit' to stop jupyter and return"
-  echo ""
-
-  # Don't exec — we need the EXIT trap to fire when the subshell returns.
-  env VIRTUAL_ENV="$PWD/$VENV" \
-      PATH="$PWD/$VENV/bin:$PATH" \
-      "${SHELL:-bash}" -i || true
-
-  # Trap handles cleanup.
-  exit 0
-fi
-
-# 5c. Default: foreground Jupyter.
+# 6. Default: foreground Jupyter.
 echo ""
 echo "==> launching Jupyter"
 echo "    workspace: $NBDIR/"

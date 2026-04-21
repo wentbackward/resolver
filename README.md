@@ -147,14 +147,29 @@ Exit codes: `0` = all gated roles PASS, `1` = at least one failed, `2`
 
 ## Reports
 
+The everyday entry point — drop into a project shell with Jupyter
+running in the background, `resolver` + `scripts/` on `PATH`, the venv
+active, and a `(resolver)` prompt marker:
+
 ```bash
-scripts/report.sh
+scripts/shell.sh
 ```
 
-On first run (~30 s) this sets up a repo-local Python venv, builds
-`resolver -tags duckdb`, aggregates everything under `reports/` and
-`research/captures/` into a single DuckDB file, seeds your personal
-notebook workspace from the tracked templates, and launches Jupyter.
+On first run (~30 s) the setup path sets up a repo-local Python venv,
+builds `resolver` and `resolver-duckdb` (`-tags duckdb`), aggregates
+everything under `reports/` and `research/captures/` into a single
+DuckDB file, seeds your personal notebook workspace from the tracked
+templates, and starts Jupyter. Subsequent runs are near-instant except
+for the aggregate step.
+
+Inside the shell:
+- `sweep.sh`, `report.sh`, `shell.sh` are invokable by name.
+- `resolver` runs the harness; `resolver-duckdb` runs the aggregator.
+- `python`, `pytest`, `analyze`, `jupyter` all resolve to the venv.
+- Type `exit` to stop Jupyter and leave.
+
+**Flags**: `--no-jupyter` (shell only), `--refresh` (rebuild binaries
++ re-aggregate even if cached).
 
 Open `quickstart.ipynb` → **Kernel → Restart & Run All** to see the
 role-coverage heat-map, per-role thresholds, and `community_benchmarks`
@@ -162,14 +177,21 @@ rendered as DataFrames from raw DuckDB SQL. The heat-map reads from
 the `role_coverage` DuckDB view — one row per (run_id, role) with
 verdict, threshold_met, expected vs observed scenario counts.
 
-All ephemera — venv, binary, your notebook workspace — live under
+All ephemera — venv, binaries, your notebook workspace — live under
 `.reporting/` (gitignored). `rm -rf .reporting/` to reset; the next run
 recreates it.
 
-**Flags**: `--no-launch` (setup only, skip Jupyter), `--refresh`
-(rebuild binary + re-aggregate even if cached).
-
 **Prerequisites**: [uv](https://github.com/astral-sh/uv) and Go 1.22+.
+
+### Foreground Jupyter only
+
+If you just want the notebook server, with no subshell:
+
+```bash
+scripts/report.sh              # foreground Jupyter
+scripts/report.sh --no-launch  # setup + aggregate, skip Jupyter
+scripts/report.sh --refresh    # rebuild + re-aggregate even if cached
+```
 
 ### Running on a remote host
 
@@ -182,7 +204,7 @@ ssh -L 8888:localhost:8888 remote-host
 
 # On the remote shell:
 cd ~/path/to/resolver
-scripts/report.sh
+scripts/shell.sh
 ```
 
 ### Power-user shortcuts
@@ -222,8 +244,9 @@ resolver/
 │   ├── aggregate/                     # DuckDB ingest (build tag: duckdb)
 │   └── manifest/                      # per-run reproducibility record
 ├── scripts/
+│   ├── shell.sh                       # enter the project shell (Jupyter + venv + PATH + prompt)
 │   ├── sweep.sh                       # run the full role sweep across virtual models
-│   └── report.sh                      # set up notebook env + launch Jupyter
+│   └── report.sh                      # set up notebook env + launch Jupyter (foreground)
 ├── tools/analyze/
 │   ├── src/analyze/                   # Python analyzer + CLI
 │   ├── prompts/                       # live Jinja template + operator run-books
