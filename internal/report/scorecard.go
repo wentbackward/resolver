@@ -197,7 +197,23 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 		rsum.AvgMs = tt.AvgMs
 		rsum.P50Ms = tt.P50Ms
 
-		// Role-specific derived metrics.
+		// Common counters — emitted for every role (v2.1.1 Fix 3).
+		// Before v2.1.1 only classifier and reducer-* roles populated
+		// `metrics_json`; the 10 agentic roles shipped empty `{}`, which
+		// broke downstream analyzer notebooks that expected `pct` on
+		// every row. Uniform base shape keeps role_scorecards.metrics_json
+		// non-empty for every role. Go's encoding/json marshals map keys
+		// in sorted order, so the emitted JSON is deterministic without
+		// an extra struct wrapper.
+		rsum.Metrics["pct"] = float64(rsum.Pct)
+		rsum.Metrics["correct"] = float64(rsum.Correct)
+		rsum.Metrics["partial"] = float64(rsum.Partial)
+		rsum.Metrics["incorrect"] = float64(rsum.Incorrect)
+		rsum.Metrics["error"] = float64(rsum.Errors)
+		rsum.Metrics["total"] = float64(rsum.Total)
+
+		// Role-specific derived metrics (layered on top of the common
+		// counters above).
 		switch role {
 		case scenario.RoleClassifier:
 			rsum.Metrics["accuracy"] = safeDiv(rsum.Correct, rsum.Total)
@@ -209,6 +225,9 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 			// compliance, status_correctness) once scenario matchers
 			// emit them individually. Keeping the key stable now so
 			// the gate-thresholds YAML doesn't need another churn.
+			// (v2.1.1 R7: `parse_validity` and `pct` are both
+			// correct/total for reducer roles — intentional, resolved
+			// in v2.2 5-rate aggregation.)
 			rsum.Metrics["parse_validity"] = safeDiv(rsum.Correct, rsum.Total)
 		}
 

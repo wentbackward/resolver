@@ -124,6 +124,104 @@ func TestScorecardShape(t *testing.T) {
 	}
 }
 
+// TestScorecard_MetricsJSONPopulated locks v2.1.1 Fix 3: every role entry
+// (not just classifier / reducer-*) must emit metrics_json containing the
+// base counters {pct, correct, partial, incorrect, error, total}. Before
+// v2.1.1 only classifier (accuracy) and reducer-json (parse_validity)
+// populated metrics; the 10 agentic roles shipped empty `{}` maps. This
+// test also spot-checks that the role-specific metrics (accuracy for
+// classifier, parse_validity for reducer-json) are layered on top of the
+// base counters rather than replacing them.
+func TestScorecard_MetricsJSONPopulated(t *testing.T) {
+	meta := report.Meta{
+		Model:       "gresh-general",
+		Endpoint:    "http://spark-01:4000/v1/chat/completions",
+		Timestamp:   scenario.ScorecardTimestamp(time.Date(2026, 4, 21, 12, 0, 0, 0, time.UTC)),
+		QueryCount:  4,
+		NodeVersion: "go1.22.7",
+	}
+	results := []runner.PerQuery{
+		// agentic role — pre-v2.1.1 would emit empty metrics.
+		{Role: scenario.RoleAgenticToolcall, ID: "A1", Score: verdict.ScoreCorrect, ElapsedMs: 100},
+		// classifier — exercises the accuracy branch.
+		{Role: scenario.RoleClassifier, ID: "C1", Score: verdict.ScoreCorrect, ElapsedMs: 100},
+		{Role: scenario.RoleClassifier, ID: "C2", Score: verdict.ScoreIncorrect, ElapsedMs: 100},
+		// reducer-json — exercises the parse_validity branch.
+		{Role: scenario.RoleReducerJSON, ID: "R1", Score: verdict.ScoreCorrect, ElapsedMs: 100},
+	}
+	sc := report.Build(meta, results)
+
+	// Every observed role must carry the uniform base counters.
+	baseKeys := []string{"pct", "correct", "partial", "incorrect", "error", "total"}
+	for role, rs := range sc.Summary.Roles {
+		for _, k := range baseKeys {
+			if _, ok := rs.Metrics[k]; !ok {
+				t.Errorf("role %q metrics missing base key %q; got %v", role, k, rs.Metrics)
+			}
+		}
+		// Counters must match the RoleSummary scalar fields.
+		if got, want := rs.Metrics["correct"], float64(rs.Correct); got != want {
+			t.Errorf("role %q metrics.correct=%v, want %v", role, got, want)
+		}
+		if got, want := rs.Metrics["total"], float64(rs.Total); got != want {
+			t.Errorf("role %q metrics.total=%v, want %v", role, got, want)
+		}
+		if got, want := rs.Metrics["pct"], float64(rs.Pct); got != want {
+			t.Errorf("role %q metrics.pct=%v, want %v", role, got, want)
+		}
+	}
+
+	// Spot-check classifier layers `accuracy` on top of base counters.
+	cls, ok := sc.Summary.Roles[scenario.RoleClassifier]
+	if !ok {
+		t.Fatal("classifier role missing from scorecard")
+	}
+	acc, ok := cls.Metrics["accuracy"]
+	if !ok {
+		t.Error("classifier metrics missing 'accuracy' key")
+	}
+	if acc != 0.5 { // 1 correct / 2 total
+		t.Errorf("classifier metrics.accuracy=%v, want 0.5", acc)
+	}
+
+	// Spot-check reducer-json layers `parse_validity` on top of base counters.
+	red, ok := sc.Summary.Roles[scenario.RoleReducerJSON]
+	if !ok {
+		t.Fatal("reducer-json role missing from scorecard")
+	}
+	pv, ok := red.Metrics["parse_validity"]
+	if !ok {
+		t.Error("reducer-json metrics missing 'parse_validity' key")
+	}
+	if pv != 1.0 { // 1 correct / 1 total
+		t.Errorf("reducer-json metrics.parse_validity=%v, want 1.0", pv)
+	}
+
+	// Round-trip through JSON to confirm the emitted metrics_json payload
+	// carries the base keys (this is what aggregate ingest persists).
+	b, err := json.Marshal(sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Summary struct {
+			Roles map[string]struct {
+				Metrics map[string]float64 `json:"metrics"`
+			} `json:"roles"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for role, rs := range decoded.Summary.Roles {
+		for _, k := range baseKeys {
+			if _, ok := rs.Metrics[k]; !ok {
+				t.Errorf("serialized role %q metrics missing base key %q", role, k)
+			}
+		}
+	}
+}
+
 func keysOf(m map[string]any) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
