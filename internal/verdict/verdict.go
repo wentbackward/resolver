@@ -57,7 +57,11 @@ type EvaluateOpts struct {
 // Evaluate applies a scenario's rule to an observed tool-call trace +
 // assistant content. Correct wins over partial wins over incorrect.
 //
-// Pass an EvaluateOpts to inject a classifier for ClassifierMatch matchers.
+// When a classifier is injected via EvaluateOpts, ClassifierMatch matchers run
+// as an independent sidecar pass after the primary structural verdict — so the
+// classifier always fires even when a structural matcher already matched.
+// Result.Classifier carries the sidecar verdict for twin-field population (B5).
+//
 // The variadic form preserves backward compatibility — existing callers with
 // no opts continue to compile and behave identically.
 func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, opts ...EvaluateOpts) Result {
@@ -74,23 +78,51 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 		}
 	}
 
+	// Primary verdict: all matcher kinds run normally (ClassifierMatch uses cc
+	// when available; is silently skipped when cc is nil / --no-classifier).
 	ok, errRes := matchAny(s.Rule.CorrectIf, calls, content, cc)
 	if errRes != nil {
 		return *errRes
 	}
+	var primary Result
 	if ok {
-		return Result{Score: ScoreCorrect, Reason: firstNonEmpty(s.Rule.ReasonCorrect, "matched correct_if rule")}
+		primary = Result{Score: ScoreCorrect, Reason: firstNonEmpty(s.Rule.ReasonCorrect, "matched correct_if rule")}
+	} else {
+		ok, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
+		if errRes != nil {
+			return *errRes
+		}
+		if ok {
+			primary = Result{Score: ScorePartial, Reason: firstNonEmpty(s.Rule.ReasonPartial, "matched partial_if rule")}
+		} else {
+			primary = Result{Score: ScoreIncorrect, Reason: firstNonEmpty(s.Rule.ReasonIncorrect, "did not match correct_if or partial_if")}
+		}
 	}
 
-	ok, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
-	if errRes != nil {
-		return *errRes
+	// Classifier sidecar: run ClassifierMatch matchers as an independent A/B
+	// pass so the classifier verdict is always captured regardless of whether
+	// a structural matcher matched first (B5 twin-field requirement). The
+	// sidecar does not influence the primary score — it attaches metadata only.
+	if cc != nil {
+		primary.Classifier = runClassifierSidecar(s, content, cc)
 	}
-	if ok {
-		return Result{Score: ScorePartial, Reason: firstNonEmpty(s.Rule.ReasonPartial, "matched partial_if rule")}
-	}
+	return primary
+}
 
-	return Result{Score: ScoreIncorrect, Reason: firstNonEmpty(s.Rule.ReasonIncorrect, "did not match correct_if or partial_if")}
+// runClassifierSidecar finds the first ClassifierMatch matcher across
+// correct_if and partial_if, runs it, and returns the ClassifierMeta.
+// Returns nil when no ClassifierMatch matcher is present.
+func runClassifierSidecar(s *scenario.Scenario, content string, cc *classifierCtx) *ClassifierMeta {
+	all := append(s.Rule.CorrectIf, s.Rule.PartialIf...)
+	for _, m := range all {
+		if m.ClassifierMatch == nil {
+			continue
+		}
+		cr := callClassifier(cc, cc.promptPath(m.ClassifierMatch.PromptRef), content)
+		r := interpretClassifier(cr, m.ClassifierMatch)
+		return r.Classifier
+	}
+	return nil
 }
 
 // matchAny returns (true, nil) if at least one Matcher evaluates to true,
