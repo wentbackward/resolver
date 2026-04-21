@@ -1,0 +1,54 @@
+# Role: classifier — investigate label scenarios (~5 per label).
+# A request to examine, debug, explain, or reason about system state.
+shared:
+  role: classifier
+scenarios:
+  - id: C2.1
+    role: classifier
+    query: why is grafana showing no data since last night?
+    expected_label: investigate
+    rule:
+      correct_if:
+        - label_is: investigate
+      reason_correct: a data-gap question on grafana requires investigation of system state
+      reason_incorrect: misrouted away from investigate
+
+  - id: C2.2
+    role: classifier
+    query: which services depend on nv-monitor and would break if it went down?
+    expected_label: investigate
+    rule:
+      correct_if:
+        - label_is: investigate
+      reason_correct: a dependency-impact question requires reasoning about topology
+      reason_incorrect: misrouted away from investigate
+
+  - id: C2.3
+    role: classifier
+    query: trace why vllm-35b latency spiked at 03:00 UTC yesterday
+    expected_label: investigate
+    rule:
+      correct_if:
+        - label_is: investigate
+      reason_correct: tracing a latency spike is a diagnostic investigation
+      reason_incorrect: misrouted away from investigate
+
+  - id: C2.4
+    role: classifier
+    query: is spark-01 healthy right now?
+    expected_label: investigate
+    rule:
+      correct_if:
+        - label_is: investigate
+      reason_correct: checking current health of a node is an investigative query about system state
+      reason_incorrect: misrouted away from investigate
+
+  - id: C2.5
+    role: classifier
+    query: what caused the OOM kill on claw-02 this morning?
+    expected_label: investigate
+    rule:
+      correct_if:
+        - label_is: investigate
+      reason_correct: root-cause analysis of an OOM kill is a diagnostic investigation
+      reason_incorrect: misrouted away from investigate

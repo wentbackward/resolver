@@ -1,0 +1,54 @@
+# Role: classifier — command label scenarios (~5 per label).
+# A request to perform a direct operational action on infrastructure.
+shared:
+  role: classifier
+scenarios:
+  - id: C1.1
+    role: classifier
+    query: restart the prometheus exporter on spark-01
+    expected_label: command
+    rule:
+      correct_if:
+        - label_is: command
+      reason_correct: restarting a named service is a direct operational command
+      reason_incorrect: misrouted away from command
+
+  - id: C1.2
+    role: classifier
+    query: show disk usage on node-07
+    expected_label: command
+    rule:
+      correct_if:
+        - label_is: command
+      reason_correct: fetching a metric reading from a named node is a command
+      reason_incorrect: misrouted away from command
+
+  - id: C1.3
+    role: classifier
+    query: apply the pending terraform plan for prod-us-east
+    expected_label: command
+    rule:
+      correct_if:
+        - label_is: command
+      reason_correct: applying a terraform plan is a direct operational action
+      reason_incorrect: misrouted away from command
+
+  - id: C1.4
+    role: classifier
+    query: tail the last 100 lines of vllm-35b logs on spark-03
+    expected_label: command
+    rule:
+      correct_if:
+        - label_is: command
+      reason_correct: retrieving log lines from a named service is a command
+      reason_incorrect: misrouted away from command
+
+  - id: C1.5
+    role: classifier
+    query: scale vllm-35b down to 2 replicas
+    expected_label: command
+    rule:
+      correct_if:
+        - label_is: command
+      reason_correct: scaling a deployment to a specific replica count is an operational command
+      reason_incorrect: misrouted away from command

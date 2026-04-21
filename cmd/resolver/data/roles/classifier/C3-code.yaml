@@ -1,0 +1,54 @@
+# Role: classifier — code label scenarios (~5 per label).
+# A request to write, modify, or review code, scripts, or config files.
+shared:
+  role: classifier
+scenarios:
+  - id: C3.1
+    role: classifier
+    query: write a bash script to rotate log files older than 30 days on spark-01
+    expected_label: code
+    rule:
+      correct_if:
+        - label_is: code
+      reason_correct: producing a bash script is a code-generation request
+      reason_incorrect: misrouted away from code
+
+  - id: C3.2
+    role: classifier
+    query: review this Dockerfile for security issues
+    expected_label: code
+    rule:
+      correct_if:
+        - label_is: code
+      reason_correct: reviewing a Dockerfile for issues is a code-review request
+      reason_incorrect: misrouted away from code
+
+  - id: C3.3
+    role: classifier
+    query: update the alerting threshold in prometheus.yml from 80% to 90%
+    expected_label: code
+    rule:
+      correct_if:
+        - label_is: code
+      reason_correct: editing a config file value is a code/config modification request
+      reason_incorrect: misrouted away from code
+
+  - id: C3.4
+    role: classifier
+    query: add a readiness probe to the vllm deployment manifest
+    expected_label: code
+    rule:
+      correct_if:
+        - label_is: code
+      reason_correct: modifying a Kubernetes manifest is a config/code change request
+      reason_incorrect: misrouted away from code
+
+  - id: C3.5
+    role: classifier
+    query: write a Python health-check script for the ollama endpoint
+    expected_label: code
+    rule:
+      correct_if:
+        - label_is: code
+      reason_correct: authoring a Python script is a code-generation request
+      reason_incorrect: misrouted away from code

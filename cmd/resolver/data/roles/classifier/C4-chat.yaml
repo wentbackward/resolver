@@ -1,0 +1,55 @@
+# Role: classifier — chat label scenarios (~5 per label).
+# Conversational, general knowledge, or clarification requests that do not
+# require system access.
+shared:
+  role: classifier
+scenarios:
+  - id: C4.1
+    role: classifier
+    query: what does a 502 bad gateway error mean?
+    expected_label: chat
+    rule:
+      correct_if:
+        - label_is: chat
+      reason_correct: a general knowledge question about HTTP status codes is conversational
+      reason_incorrect: misrouted away from chat
+
+  - id: C4.2
+    role: classifier
+    query: how does consistent hashing work?
+    expected_label: chat
+    rule:
+      correct_if:
+        - label_is: chat
+      reason_correct: a conceptual explanation of an algorithm is a chat request
+      reason_incorrect: misrouted away from chat
+
+  - id: C4.3
+    role: classifier
+    query: summarise what happened in today's incident for the post-mortem doc
+    expected_label: chat
+    rule:
+      correct_if:
+        - label_is: chat
+      reason_correct: summarising for documentation is conversational composition with no system access needed
+      reason_incorrect: misrouted away from chat
+
+  - id: C4.4
+    role: classifier
+    query: what is the difference between a rolling restart and a full redeploy?
+    expected_label: chat
+    rule:
+      correct_if:
+        - label_is: chat
+      reason_correct: comparing two operational concepts is a general knowledge chat question
+      reason_incorrect: misrouted away from chat
+
+  - id: C4.5
+    role: classifier
+    query: can you explain what RBAC is?
+    expected_label: chat
+    rule:
+      correct_if:
+        - label_is: chat
+      reason_correct: asking for an explanation of a concept is a chat request
+      reason_incorrect: misrouted away from chat
