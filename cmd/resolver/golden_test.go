@@ -138,7 +138,7 @@ func TestGoldenReplay(t *testing.T) {
 // would invisibly drift the scorecard shape.
 func TestGoldenReplayUnderYAMLThresholds(t *testing.T) {
 	dataDir := dataSource{}
-	raw, err := dataDir.readFile("shared/gate-thresholds.yaml")
+	raw, err := dataDir.readFile("gate-thresholds.yaml")
 	if err != nil {
 		t.Fatalf("read embedded thresholds: %v", err)
 	}

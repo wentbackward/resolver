@@ -10,7 +10,7 @@ import (
 
 // TestEmbeddedYAMLMatchesHardcodedDefaults guards against drift: the
 // hardcoded fallback inside GatedTiers() and the embedded YAML at
-// cmd/resolver/data/shared/gate-thresholds.yaml must stay equivalent.
+// cmd/resolver/data/gate-thresholds.yaml must stay equivalent.
 // If they ever diverge, the YAML is the intended source of truth (what
 // runtime actually serves) and the hardcoded fallback is the safety net —
 // either update both or document the intentional split.
@@ -23,7 +23,7 @@ func TestEmbeddedYAMLMatchesHardcodedDefaults(t *testing.T) {
 	// cmd/resolver/data.
 	wd, _ := os.Getwd()
 	repo := filepath.Dir(filepath.Dir(wd)) // internal/scenario → repo root
-	yamlPath := filepath.Join(repo, "cmd", "resolver", "data", "shared", "gate-thresholds.yaml")
+	yamlPath := filepath.Join(repo, "cmd", "resolver", "data", "gate-thresholds.yaml")
 	raw, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatalf("read embedded YAML: %v", err)

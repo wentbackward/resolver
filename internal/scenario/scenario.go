@@ -73,7 +73,7 @@ func AllRoles() []Role {
 }
 
 // GatedTiers returns the gated check set. Defaults mirror the
-// canonical v2.1 YAML at `cmd/resolver/data/shared/gate-thresholds.yaml`;
+// canonical v2.1 YAML at `cmd/resolver/data/gate-thresholds.yaml`;
 // the hardcoded list is a safety net for the rare case the embedded
 // YAML fails to load. Keeping the two in sync is what
 // TestGoldenReplayUnderYAMLThresholds enforces.

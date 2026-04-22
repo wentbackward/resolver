@@ -90,7 +90,7 @@ func TestScorecardShape(t *testing.T) {
 
 	// Role entry shape. Gated role must carry thresholdMet + threshold +
 	// verdict of PASS/FAIL; ungated roles would be INFO with no threshold
-	// fields. agentic-toolcall is gated at 90% in shared/gate-thresholds.yaml,
+	// fields. agentic-toolcall is gated at 90% in gate-thresholds.yaml,
 	// so the single-correct test above yields pct=100 → PASS.
 	rs, _ := roles["agentic-toolcall"].(map[string]any)
 	for _, k := range []string{"verdict", "metrics", "scenarios", "correct", "partial", "incorrect", "errors", "total", "pct", "avgMs", "p50Ms", "scenarioCountExpected", "scenarioCountObserved"} {

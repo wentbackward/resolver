@@ -267,3 +267,22 @@ approach is right — deterministic, reproducible, no real side-effects
 
 Parked until we've finished the role walk-through — then plan
 properly.
+
+### Remove tier1 / tier2 dispatch machinery
+
+All scenarios now live under `cmd/resolver/data/roles/*/`. The legacy
+`--tier {1,2}` flag + `loadTierScenarios()` path (points at
+`tier1/` / `tier2-multiturn/`) is dead code — running `./resolver`
+without `--role` errors on `open tier1: file does not exist` because
+the directory is already gone. Cleanup scope:
+
+- Delete the `--tier` CLI flag
+- Delete `loadTierScenarios()` and the `isMultiTurn` branch at
+  `cmd/resolver/main.go:390`
+- Collapse `runTier` / `runTierOnce` naming if it reads oddly without
+  the tier concept (role is the unit of dispatch now)
+- Update the fallback path so no-role invocations either (a) error
+  with "pass --role" or (b) walk every `roles/*/` directory
+
+Deferred because every real invocation uses `--role`, so this is
+housekeeping, not a functional blocker.

@@ -152,7 +152,7 @@ func loadThresholds(override string, dataDir dataSource) error {
 		scenario.SetGatedTiers(checks)
 		return nil
 	}
-	raw, err := dataDir.readFile("shared/gate-thresholds.yaml")
+	raw, err := dataDir.readFile("gate-thresholds.yaml")
 	if err != nil {
 		return err
 	}
@@ -747,15 +747,32 @@ func (ds dataSource) loadToolsAndPromptFor(role string) ([]scenario.ToolDef, str
 	if err != nil {
 		return nil, "", fmt.Errorf("load tools: %w", err)
 	}
-	sysPath := "tier1/system-prompt.md"
-	if role != "" {
-		sysPath = "roles/" + role + "/system-prompt.md"
-	}
-	sys, err := ds.readFile(sysPath)
+
+	// Always load the top-level sysadm frame.
+	top, err := ds.readFile("system-prompt.md")
 	if err != nil {
-		return nil, "", fmt.Errorf("load system prompt: %w", err)
+		return nil, "", fmt.Errorf("load top-level system prompt: %w", err)
 	}
-	return tools, sys, nil
+	if role == "" {
+		return tools, top, nil
+	}
+
+	// Role override: `system-prompt.override.md` fully replaces the top-level
+	// prompt. Use for roles that aren't sysadm probes (classifier, reducer-*).
+	if override, err := ds.readFile("roles/" + role + "/system-prompt.override.md"); err == nil {
+		return tools, override, nil
+	}
+
+	// Role extension: `system-prompt.md` is appended to the top-level prompt
+	// with a blank-line separator. Use for probe-specific instructions that
+	// layer on top of the sysadm frame (e.g. agentic-toolcall's tool-call-only
+	// rule, long-context's "context facts supersede defaults").
+	if ext, err := ds.readFile("roles/" + role + "/system-prompt.md"); err == nil {
+		return tools, top + "\n\n" + ext, nil
+	}
+
+	// Role has no custom prompt — use the top-level unchanged.
+	return tools, top, nil
 }
 
 func (ds dataSource) loadTierScenarios(tier string) ([]scenario.Scenario, error) {

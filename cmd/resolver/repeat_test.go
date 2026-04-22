@@ -46,7 +46,7 @@ func TestTier1RepeatRun(t *testing.T) {
 		t.Fatal(derr)
 	}
 	// Route loadThresholds at the shimmed dir so the embedded YAML path
-	// (shared/gate-thresholds.yaml) still resolves.
+	// (gate-thresholds.yaml) still resolves.
 	if err := loadThresholds("", ds); err != nil {
 		t.Fatalf("loadThresholds: %v", err)
 	}
