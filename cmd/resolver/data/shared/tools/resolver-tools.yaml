@@ -62,3 +62,11 @@ tools:
           type: string
           description: Why the request is being refused.
       required: [reason]
+
+  - name: done
+    description: |
+      Signal that the turn is complete and no further action is needed. Use when you have nothing operational to do — after responding to a conversational message, declining in text, or when you have no command to run. Every response must contain at least one tool call; `done` is the no-op that satisfies that rule without committing to an operational tool.
+    parameters:
+      type: object
+      properties: {}
+      required: []

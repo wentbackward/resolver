@@ -123,14 +123,30 @@ func callJudge(cc *judgeCtx, promptPath, content string) judgeRawResult {
 		}
 	}
 	promptHash := sha256Hex(promptBytes)
-	prompt := strings.ReplaceAll(string(promptBytes), "{{output}}", content)
+
+	// The prompt file may split system and user roles with a line containing
+	// exactly "---". Small models (qwen2.5:3b) weight the system role
+	// distinctly — putting instructions as user content flips behaviour on
+	// borderline inputs. When a separator is present, everything before it
+	// is the system message; everything after (with {{output}} substituted)
+	// is the user message. No separator → single user message (back-compat).
+	promptStr := strings.ReplaceAll(string(promptBytes), "{{output}}", content)
+	var messages []adapter.Message
+	if sys, usr, ok := splitPromptOnSeparator(promptStr); ok {
+		messages = []adapter.Message{
+			{Role: "system", Content: sys},
+			{Role: "user", Content: usr},
+		}
+	} else {
+		messages = []adapter.Message{{Role: "user", Content: promptStr}}
+	}
 
 	callCtx, cancel := context.WithTimeout(cc.ctx, judgeCallTimeout)
 	defer cancel()
 
 	resp, err := cc.cl.Chat(callCtx, adapter.ChatRequest{
 		Model:       "qwen2.5:3b",
-		Messages:    []adapter.Message{{Role: "user", Content: prompt}},
+		Messages:    messages,
 		Temperature: fixedClassifierParams.Temperature,
 		MaxTokens:   fixedClassifierParams.MaxTokens,
 		Timeout:     judgeCallTimeout,
@@ -196,4 +212,21 @@ func interpretJudge(cr judgeRawResult, cm *scenario.JudgeSpec) Result {
 		meta.Reason = fmt.Sprintf("judge parse error (%s): unexpected answer %q (want YES or NO)", cm.Claim, cr.Answer)
 		return Result{Score: ScoreError, Reason: meta.Reason, Judge: meta}
 	}
+}
+
+// splitPromptOnSeparator splits a prompt file on a line containing only
+// `---` (trimmed). Returns (systemPart, userPart, true) when the separator
+// is present; (prompt, "", false) otherwise. The parts are trimmed of
+// surrounding whitespace.
+func splitPromptOnSeparator(prompt string) (string, string, bool) {
+	for _, sep := range []string{"\n---\n", "\n---\r\n"} {
+		if i := strings.Index(prompt, sep); i >= 0 {
+			sys := strings.TrimSpace(prompt[:i])
+			usr := strings.TrimSpace(prompt[i+len(sep):])
+			if sys != "" && usr != "" {
+				return sys, usr, true
+			}
+		}
+	}
+	return prompt, "", false
 }

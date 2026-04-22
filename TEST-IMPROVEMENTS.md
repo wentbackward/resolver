@@ -286,3 +286,21 @@ the directory is already gone. Cleanup scope:
 
 Deferred because every real invocation uses `--role`, so this is
 housekeeping, not a functional blocker.
+
+### `done(summary)` — auditable turn-end
+
+`done()` ships today as an argument-less no-op that satisfies the
+"every response must contain a tool call" rule without committing to
+an operational tool. In a production sysadm setting, `done(summary)`
+with a one-sentence human-readable summary would be strictly better:
+auditable trail of why the model decided nothing was needed, without
+forcing a downstream consumer to parse free-text content.
+
+Parking for now because:
+  - adds a new matcher concern (summary quality — judge-gradable?)
+  - changes every `done()` emission site in the future corpus
+  - unclear whether model fluency at T=0 produces useful summaries or
+    just repetition
+
+Revisit when we have enough done() usage data to know whether the
+summary would be signal or noise.

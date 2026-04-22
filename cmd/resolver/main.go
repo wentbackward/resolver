@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/wentbackward/resolver/internal/adapter"
@@ -191,7 +192,10 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		judgePromptHash   string
 	)
 	if !f.noJudge {
-		judgeAd = adapter.NewOllamaChat("")
+		// Judge uses ollama's native /api/chat for reliability. The OpenAI-compat
+		// shim at /v1/chat/completions was observed to flip answers on borderline
+		// inputs at temperature=0, while the native API honours sampling faithfully.
+		judgeAd = adapter.NewOllamaNative("")
 		cdd, cleanup, err := setupJudgeDataDir(f, dataDir)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error: judge data dir:", err)
@@ -1112,6 +1116,83 @@ func printScorecard(w *os.File, sc report.Scorecard) {
 	fmt.Fprintf(w, "\n  timing:  total=%dms avg=%dms p50=%dms p95=%dms max=%dms count=%d\n",
 		sc.Summary.Timing.TotalMs, sc.Summary.Timing.AvgMs, sc.Summary.Timing.P50Ms,
 		sc.Summary.Timing.P95Ms, sc.Summary.Timing.MaxMs, sc.Summary.Timing.Count)
+
+	printScenarioTable(w, sc)
+}
+
+// verdictIcon maps a verdict.Score to a single-rune visual indicator.
+// Empty Score (the JudgeScore zero-value when no judge arm fired) renders as —.
+func verdictIcon(s verdict.Score) string {
+	switch s {
+	case verdict.ScoreCorrect:
+		return "✓"
+	case verdict.ScorePartial:
+		return "~"
+	case verdict.ScoreIncorrect:
+		return "✗"
+	case verdict.ScoreError:
+		return "E"
+	default:
+		return "—"
+	}
+}
+
+// printScenarioTable renders a per-scenario table after the scorecard summary
+// so operators can eyeball which scenarios hit the regex arm vs the judge arm,
+// which emitted tool calls, and what the model actually said — without opening
+// the scorecard JSON. One table per scorecard; follows the rep cycle.
+func printScenarioTable(w *os.File, sc report.Scorecard) {
+	if len(sc.Results) == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "  ID\tVerdict\tTools\tJudge\tOutput preview")
+	fmt.Fprintln(tw, "  ----\t-------\t-----\t-----\t--------------")
+	for _, r := range sc.Results {
+		// Tool call summary — comma-joined names, or — if no tool calls.
+		names := make([]string, 0, len(r.ToolCalls))
+		for _, tc := range r.ToolCalls {
+			names = append(names, tc.Name)
+		}
+		tools := "—"
+		if len(names) > 0 {
+			tools = strings.Join(names, ",")
+		}
+		// Content preview — 50 chars of content, or a stand-in when the
+		// response is tool-call-only (empty content but tool calls present).
+		preview := previewContent(r.Content, len(names) > 0)
+		fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\t%s\n",
+			r.ID,
+			verdictIcon(r.Score),
+			tools,
+			verdictIcon(r.JudgeScore),
+			preview,
+		)
+	}
+	tw.Flush()
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Legend:  ✓ correct · ~ partial · ✗ incorrect · E error · — n/a")
+}
+
+// previewContent formats PerQuery.Content (declared as any) into a short,
+// single-line preview suitable for the scenario table. Empty content combined
+// with tool calls renders as "(tool-call only)" so operators don't mistake the
+// row for a silent failure.
+func previewContent(c any, hasToolCalls bool) string {
+	const maxLen = 60
+	s, _ := c.(string)
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
+	if s == "" {
+		if hasToolCalls {
+			return "(tool-call only)"
+		}
+		return "(empty)"
+	}
+	if len(s) > maxLen {
+		return s[:maxLen-1] + "…"
+	}
+	return s
 }
 
 func printSweepSummary(w *os.File, sweep string, rows []runner.SweepRow) {
