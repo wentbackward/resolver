@@ -159,6 +159,35 @@ both verdicts surface in `role_scorecards.metrics_json` via B5 twin-field expans
 
 ---
 
+## Trace log excerpt (§11.2 observability gate)
+
+`callClassifier` emits one line to stderr per call (added in the F3 fix) so operators
+can confirm which model fired, verify elapsed ms, and audit the params hash without
+parsing the full scorecard JSON.
+
+**Source:** `go test -v -run TestRunTier1_ClassifierMatch_EndToEnd ./internal/runner/`
+(F5 integration test — httptest-stubbed classifier, `elapsed=0ms` because the stub
+replies synchronously; production runs show real elapsed from the ollama adapter).
+
+```
+classifier: model=qwen2.5:3b elapsed=0ms paramsHash=560aafd0 answer=YES
+```
+
+**Field breakdown:**
+
+| Field | Value | Meaning |
+|---|---|---|
+| `model` | `qwen2.5:3b` | Classifier model — must match weight-pinned digest in `classifier-pins.yaml` |
+| `elapsed` | `0ms` (stub) / `144ms` (production, C3 sweep) | Per-call latency; used to surface slow model loads |
+| `paramsHash` | `560aafd0…` | First 8 chars of `sha256({"max_tokens":16,"seed":null,"temperature":0,"top_p":null})` — stable across runs; change means params drifted |
+| `answer` | `YES` | Raw classifier verdict before `interpretClassifier` converts to `ScoreCorrect` |
+
+The `paramsHash=560aafd0` seen here matches `classifierInput.classifierParamsHash` in the
+C3 sweep's per-query JSON below, proving the trace and the scorecard snapshot are derived
+from the same canonical parameter set.
+
+---
+
 ## Worked B8 replay example (classify-replay — prompt-edit diff)
 
 **Context:** B8 (`cmd/classify-replay`) re-runs classifier verdicts from an archived scorecard

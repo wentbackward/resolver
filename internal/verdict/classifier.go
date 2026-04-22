@@ -145,6 +145,13 @@ func callClassifier(cc *classifierCtx, promptPath, content string) classifierRaw
 		}
 	}
 	answer := strings.ToUpper(strings.TrimSpace(resp.Content))
+	// Observability trace (§11.2): one line per classifier call so operators
+	// can confirm which model fired, verify elapsed ms, and audit the params
+	// hash without reading the full scorecard JSON.
+	fmt.Fprintf(os.Stderr,
+		"classifier: model=%s elapsed=%dms paramsHash=%.8s answer=%s\n",
+		"qwen2.5:3b", resp.ElapsedMs, paramsHash, answer,
+	)
 	return classifierRawResult{
 		Answer:               answer,
 		ElapsedMs:            resp.ElapsedMs,
