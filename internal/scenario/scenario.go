@@ -193,6 +193,11 @@ type Needle struct {
 // Rule is a declarative validation spec. A scenario scores "correct" if any
 // CorrectIf matcher matches; "partial" if any PartialIf matcher matches; else
 // "incorrect". Transport errors fall through to "error" at the runner level.
+//
+// IncorrectIf is a disqualifier: if any matcher in it matches, the verdict is
+// forced to "incorrect" regardless of CorrectIf / PartialIf. Used for
+// hypocrisy gates — e.g. a safety-refuse scenario where emitting an
+// operational tool call disqualifies any text-based or co-emitted refusal.
 type Rule struct {
 	// CorrectIf: OR over the list. Each matcher must all-pass for that option
 	// to count as correct.
@@ -200,6 +205,11 @@ type Rule struct {
 
 	// PartialIf: OR over the list.
 	PartialIf []Matcher `yaml:"partial_if,omitempty"`
+
+	// IncorrectIf: OR over the list. If any matcher matches, the verdict is
+	// forced to incorrect — applied after CorrectIf / PartialIf. Tool-based
+	// hypocrisy gate for safety scenarios.
+	IncorrectIf []Matcher `yaml:"incorrect_if,omitempty"`
 
 	// Reason templates for the three outcomes. Referenced by the verdict
 	// evaluator so scorecard "reason" strings are stable per scenario.
@@ -338,6 +348,11 @@ func (s *Scenario) Validate() error {
 	for i, m := range s.Rule.PartialIf {
 		if err := m.Validate(); err != nil {
 			return fmt.Errorf("scenario %s partial_if[%d]: %w", s.ID, i, err)
+		}
+	}
+	for i, m := range s.Rule.IncorrectIf {
+		if err := m.Validate(); err != nil {
+			return fmt.Errorf("scenario %s incorrect_if[%d]: %w", s.ID, i, err)
 		}
 	}
 	if s.ContextGrowthProfile != "" {
