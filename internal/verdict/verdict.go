@@ -30,21 +30,21 @@ const (
 type Result struct {
 	Score  Score
 	Reason string
-	// Classifier is populated when a ClassifierMatch matcher fired.
-	// nil when no classifier matcher was involved in producing this verdict.
-	Classifier *ClassifierMeta
+	// Judge is populated when a Judge matcher fired.
+	// nil when no judge matcher was involved in producing this verdict.
+	Judge *JudgeMeta
 }
 
 // EvaluateOpts carries optional dependencies for Evaluate. All fields are
 // optional; the zero value produces the same behaviour as the pre-B3 call
-// (no classifier, backward compatible).
+// (no judge, backward compatible).
 type EvaluateOpts struct {
-	// Classifier, if non-nil, is used for ClassifierMatch matchers.
-	// When nil (including the --no-classifier path), ClassifierMatch matchers
+	// Judge, if non-nil, is used for Judge matchers.
+	// When nil (including the --no-judge path), Judge matchers
 	// are silently skipped (not counted as matches).
-	Classifier adapter.Adapter
+	Judge adapter.Adapter
 
-	// Ctx is the parent context for classifier calls. Defaults to
+	// Ctx is the parent context for judge calls. Defaults to
 	// context.Background() when nil.
 	Ctx context.Context
 
@@ -57,32 +57,32 @@ type EvaluateOpts struct {
 // Evaluate applies a scenario's rule to an observed tool-call trace +
 // assistant content. Correct wins over partial wins over incorrect.
 //
-// When a classifier is injected via EvaluateOpts, ClassifierMatch matchers run
-// inline during the primary verdict pass. The ClassifierMeta from the first
-// ClassifierMatch encountered is threaded through to Result.Classifier without
+// When a judge is injected via EvaluateOpts, Judge matchers run
+// inline during the primary verdict pass. The JudgeMeta from the first
+// Judge encountered is threaded through to Result.Judge without
 // a second call — avoiding the double-fire bug where a sidecar re-invoked the
-// same classifier matcher that already ran during the primary pass (F1 fix).
+// same judge matcher that already ran during the primary pass (F1 fix).
 //
 // The variadic form preserves backward compatibility — existing callers with
 // no opts continue to compile and behave identically.
 func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, opts ...EvaluateOpts) Result {
-	var cc *classifierCtx
-	if len(opts) > 0 && opts[0].Classifier != nil {
+	var cc *judgeCtx
+	if len(opts) > 0 && opts[0].Judge != nil {
 		ctx := opts[0].Ctx
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		cc = &classifierCtx{
-			cl:      opts[0].Classifier,
+		cc = &judgeCtx{
+			cl:      opts[0].Judge,
 			ctx:     ctx,
 			dataDir: opts[0].DataDir,
 		}
 	}
 
-	// Primary verdict: all matcher kinds run normally (ClassifierMatch uses cc
-	// when available; is silently skipped when cc is nil / --no-classifier).
-	// matchAny now threads out *ClassifierMeta so we can attach it to the
-	// result without a redundant second classifier call (F1 fix).
+	// Primary verdict: all matcher kinds run normally (Judge uses cc
+	// when available; is silently skipped when cc is nil / --no-judge).
+	// matchAny now threads out *JudgeMeta so we can attach it to the
+	// result without a redundant second judge call (F1 fix).
 	ok, clMeta, errRes := matchAny(s.Rule.CorrectIf, calls, content, cc)
 	if errRes != nil {
 		return *errRes
@@ -91,7 +91,7 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 	if ok {
 		primary = Result{Score: ScoreCorrect, Reason: firstNonEmpty(s.Rule.ReasonCorrect, "matched correct_if rule")}
 	} else {
-		var clMeta2 *ClassifierMeta
+		var clMeta2 *JudgeMeta
 		ok, clMeta2, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
 		if errRes != nil {
 			return *errRes
@@ -106,45 +106,45 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 		}
 	}
 
-	// Attach classifier meta. When the primary pass already evaluated a
-	// ClassifierMatch (clMeta != nil), reuse that result — no second call.
-	// Only fall back to the sidecar when no ClassifierMatch appeared in the
-	// primary matchers at all (e.g. classifier_match lives only in partial_if
+	// Attach judge meta. When the primary pass already evaluated a
+	// Judge (clMeta != nil), reuse that result — no second call.
+	// Only fall back to the sidecar when no Judge appeared in the
+	// primary matchers at all (e.g. judge lives only in partial_if
 	// of a scenario that matched correct_if via a structural rule).
 	if cc != nil {
 		if clMeta != nil {
-			primary.Classifier = clMeta
+			primary.Judge = clMeta
 		} else {
-			primary.Classifier = runClassifierSidecar(s, content, cc)
+			primary.Judge = runJudgeSidecar(s, content, cc)
 		}
 	}
 	return primary
 }
 
-// runClassifierSidecar finds the first ClassifierMatch matcher across
-// correct_if and partial_if, runs it, and returns the ClassifierMeta.
+// runJudgeSidecar finds the first Judge matcher across
+// correct_if and partial_if, runs it, and returns the JudgeMeta.
 // Called only when the primary matchAny pass did not encounter any
-// ClassifierMatch (clMeta == nil), preventing double-fire (F1).
-// Returns nil when no ClassifierMatch matcher is present.
-func runClassifierSidecar(s *scenario.Scenario, content string, cc *classifierCtx) *ClassifierMeta {
+// Judge (clMeta == nil), preventing double-fire (F1).
+// Returns nil when no Judge matcher is present.
+func runJudgeSidecar(s *scenario.Scenario, content string, cc *judgeCtx) *JudgeMeta {
 	all := append(s.Rule.CorrectIf, s.Rule.PartialIf...)
 	for _, m := range all {
-		if m.ClassifierMatch == nil {
+		if m.Judge == nil {
 			continue
 		}
-		cr := callClassifier(cc, cc.promptPath(m.ClassifierMatch.PromptRef), content)
-		r := interpretClassifier(cr, m.ClassifierMatch)
-		return r.Classifier
+		cr := callJudge(cc, cc.promptPath(m.Judge.PromptRef), content)
+		r := interpretJudge(cr, m.Judge)
+		return r.Judge
 	}
 	return nil
 }
 
 // matchAny returns (true, meta, nil) if at least one Matcher evaluates to
-// true, (false, meta, &Result{ScoreError, ...}) if a ClassifierMatch returns
-// an error, or (false, nil, nil) if no matcher matches. The *ClassifierMeta
-// is non-nil whenever a ClassifierMatch fired (regardless of YES/NO/error)
-// so callers can reuse it without a second classifier call (F1 fix).
-func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *ClassifierMeta, *Result) {
+// true, (false, meta, &Result{ScoreError, ...}) if a Judge returns
+// an error, or (false, nil, nil) if no matcher matches. The *JudgeMeta
+// is non-nil whenever a Judge fired (regardless of YES/NO/error)
+// so callers can reuse it without a second judge call (F1 fix).
+func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, cc *judgeCtx) (bool, *JudgeMeta, *Result) {
 	for _, m := range ms {
 		ok, meta, errRes := matchOne(m, calls, content, cc)
 		if errRes != nil {
@@ -158,11 +158,11 @@ func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, c
 }
 
 // matchOne evaluates a single Matcher. Returns (matched, meta, nil) for all
-// matchers; meta is non-nil only when a ClassifierMatch fired. Returns
-// (false, meta, &Result{ScoreError}) when a ClassifierMatch call fails or
-// returns a non-YES/NO answer; (false, nil, nil) when ClassifierMatch is
-// skipped because no classifier is injected.
-func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *ClassifierMeta, *Result) {
+// matchers; meta is non-nil only when a Judge fired. Returns
+// (false, meta, &Result{ScoreError}) when a Judge call fails or
+// returns a non-YES/NO answer; (false, nil, nil) when Judge is
+// skipped because no judge is injected.
+func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *judgeCtx) (bool, *JudgeMeta, *Result) {
 	switch {
 	case m.ToolCallRequired != nil:
 		return hasToolCallMatch(calls, *m.ToolCallRequired), nil, nil
@@ -188,22 +188,22 @@ func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *
 		return json.Valid([]byte(stripThinkAndTrim(content))), nil, nil
 	case m.JSONFieldPresent != nil:
 		return jsonFieldPresent(content, *m.JSONFieldPresent), nil, nil
-	case m.ClassifierMatch != nil:
+	case m.Judge != nil:
 		if cc == nil {
-			// No classifier injected (--no-classifier path); skip silently.
+			// No judge injected (--no-judge path); skip silently.
 			return false, nil, nil
 		}
-		cr := callClassifier(cc, cc.promptPath(m.ClassifierMatch.PromptRef), content)
-		r := interpretClassifier(cr, m.ClassifierMatch)
+		cr := callJudge(cc, cc.promptPath(m.Judge.PromptRef), content)
+		r := interpretJudge(cr, m.Judge)
 		// Always return the meta so callers can reuse it (F1 fix: prevents
-		// double-fire when classifier_match is first in correct_if).
+		// double-fire when judge is first in correct_if).
 		switch r.Score {
 		case ScoreCorrect:
-			return true, r.Classifier, nil
+			return true, r.Judge, nil
 		case ScoreIncorrect:
-			return false, r.Classifier, nil
+			return false, r.Judge, nil
 		default: // ScoreError
-			return false, r.Classifier, &r
+			return false, r.Judge, &r
 		}
 	}
 	return false, nil, nil
@@ -221,7 +221,7 @@ func stripThinkAndTrim(content string) string {
 	return strings.TrimSpace(thinkTagRe.ReplaceAllString(content, ""))
 }
 
-// labelPunctRe matches trailing punctuation a classifier model may append to
+// labelPunctRe matches trailing punctuation a judge model may append to
 // its single-label output (e.g. `"exec."`, `"diagnose!"`).
 var labelPunctRe = regexp.MustCompile(`[\s\p{P}]+$`)
 

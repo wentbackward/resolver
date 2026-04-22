@@ -52,9 +52,9 @@ func readCapped(path string, limit int64) ([]byte, error) {
 //       reproducibility, plus RunConfig.MinP (the gresh-reasoner 0.05
 //       clamp that was unrecorded in v2). Tier stays for archival
 //       readers but is no longer written by the live harness.
-//   v4: classifier-matcher foundation. Adds classifier metadata fields
-//       (ClassifierModel, ClassifierWeightDigest, ClassifierEndpoint,
-//       ClassifierPromptRef, ClassifierPromptHash, ClassifierDisabled).
+//   v4: judge-matcher foundation. Adds judge metadata fields
+//       (JudgeModel, JudgeWeightDigest, JudgeEndpoint,
+//       JudgePromptRef, JudgePromptHash, JudgeDisabled).
 //       All fields are additive optional (omitempty); v3 manifests remain
 //       readable by every v4 tool (aggregator accepts v3 + v4).
 const SchemaVersion = 4
@@ -156,15 +156,15 @@ type Manifest struct {
 	// v2: optional sidecar describing the stack behind the run.
 	RunConfig *RunConfig `json:"runConfig,omitempty"`
 
-	// v4: classifier metadata. All fields are omitempty; v3 manifests that
-	// pre-date the classifier extension omit these fields entirely.
-	// ClassifierDisabled is true when --no-classifier was set.
-	ClassifierModel        string `json:"classifierModel,omitempty"`
-	ClassifierWeightDigest string `json:"classifierWeightDigest,omitempty"`
-	ClassifierEndpoint     string `json:"classifierEndpoint,omitempty"`
-	ClassifierPromptRef    string `json:"classifierPromptRef,omitempty"`
-	ClassifierPromptHash   string `json:"classifierPromptHash,omitempty"`
-	ClassifierDisabled     bool   `json:"classifierDisabled,omitempty"`
+	// v4: judge metadata. All fields are omitempty; v3 manifests that
+	// pre-date the judge extension omit these fields entirely.
+	// JudgeDisabled is true when --no-judge was set.
+	JudgeModel        string `json:"judgeModel,omitempty"`
+	JudgeWeightDigest string `json:"judgeWeightDigest,omitempty"`
+	JudgeEndpoint     string `json:"judgeEndpoint,omitempty"`
+	JudgePromptRef    string `json:"judgePromptRef,omitempty"`
+	JudgePromptHash   string `json:"judgePromptHash,omitempty"`
+	JudgeDisabled     bool   `json:"judgeDisabled,omitempty"`
 }
 
 // Builder accumulates values during a run, then emits a Manifest.
@@ -226,26 +226,26 @@ func (b *Builder) WithRunConfig(rc *RunConfig) *Builder {
 	return b
 }
 
-// WithClassifier records the classifier configuration used for ClassifierMatch
+// WithJudge records the judge configuration used for Judge
 // matchers in this run. model is the ollama model name (e.g. "qwen2.5:3b"),
 // weightDigest is the sha256 of the locally-pulled model weights (from
-// `ollama show --modelfile`), endpoint is the classifier adapter endpoint,
+// `ollama show --modelfile`), endpoint is the judge adapter endpoint,
 // promptRef is the relative path to the matcher prompt file, and promptHash is
 // the sha256 of that file's contents at call time.
-func (b *Builder) WithClassifier(model, weightDigest, endpoint, promptRef, promptHash string) *Builder {
-	b.m.ClassifierModel = model
-	b.m.ClassifierWeightDigest = weightDigest
-	b.m.ClassifierEndpoint = endpoint
-	b.m.ClassifierPromptRef = promptRef
-	b.m.ClassifierPromptHash = promptHash
+func (b *Builder) WithJudge(model, weightDigest, endpoint, promptRef, promptHash string) *Builder {
+	b.m.JudgeModel = model
+	b.m.JudgeWeightDigest = weightDigest
+	b.m.JudgeEndpoint = endpoint
+	b.m.JudgePromptRef = promptRef
+	b.m.JudgePromptHash = promptHash
 	return b
 }
 
-// WithClassifierDisabled marks the manifest as having the classifier disabled
-// for this run (--no-classifier flag was set). Downstream aggregation should
-// treat ClassifierMatch verdicts as absent rather than as errors.
-func (b *Builder) WithClassifierDisabled() *Builder {
-	b.m.ClassifierDisabled = true
+// WithJudgeDisabled marks the manifest as having the judge disabled
+// for this run (--no-judge flag was set). Downstream aggregation should
+// treat Judge verdicts as absent rather than as errors.
+func (b *Builder) WithJudgeDisabled() *Builder {
+	b.m.JudgeDisabled = true
 	return b
 }
 

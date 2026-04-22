@@ -48,7 +48,7 @@ func (*OllamaChat) Name() string { return "ollama-chat" }
 // Retries up to ollamaMaxRetries times on HTTP 503 or connection errors, with
 // exponential backoff starting at ollamaRetryBase. A per-request timeout in
 // req.Timeout overrides the adapter's default 180 s client timeout (used by
-// B3's 5 s classifier timeout and B4's 2 s preflight health check).
+// B3's 5 s judge timeout and B4's 2 s preflight health check).
 func (a *OllamaChat) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	payload := openaiRequest{
 		Model:       req.Model,

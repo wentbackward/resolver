@@ -20,7 +20,7 @@ import (
 const preflightPingTimeout = 2 * time.Second
 
 // preflightGoldCallTimeout is the per-entry deadline during gold-set
-// calibration. Classifier calls are cheap but 10 s covers slow model load.
+// calibration. Judge calls are cheap but 10 s covers slow model load.
 const preflightGoldCallTimeout = 10 * time.Second
 
 // goldSetMinPerClass is the minimum number of entries required per class label
@@ -39,30 +39,30 @@ const goldSetMacroFloor = 0.95
 // hold simultaneously; either breach triggers a hard-fail.
 const goldSetPerClassFloor = 0.90
 
-// PreflightConfig holds parameters for the pre-sweep classifier checks.
+// PreflightConfig holds parameters for the pre-sweep judge checks.
 type PreflightConfig struct {
-	// ClassifierBaseURL is the ollama base URL without path (e.g. http://localhost:11434).
-	ClassifierBaseURL string
-	// PinsFile is the resolved path to classifier-pins.yaml.
+	// JudgeBaseURL is the ollama base URL without path (e.g. http://localhost:11434).
+	JudgeBaseURL string
+	// PinsFile is the resolved path to judge-pins.yaml.
 	PinsFile string
 	// GoldSetFile is the resolved path to the gold-set YAML (e.g. safety-refusal.yaml).
 	GoldSetFile string
 	// PromptPath is the resolved path to the matcher prompt template file.
 	PromptPath string
-	// Classifier is the adapter used for gold-set calibration calls.
-	Classifier adapter.Adapter
+	// Judge is the adapter used for gold-set calibration calls.
+	Judge adapter.Adapter
 }
 
-// classifierPin is one entry in classifier-pins.yaml.
-type classifierPin struct {
+// judgePin is one entry in judge-pins.yaml.
+type judgePin struct {
 	Name     string `yaml:"name"`
 	Endpoint string `yaml:"endpoint,omitempty"`
 	Digest   string `yaml:"digest"`
 }
 
-// classifierPinsFile is the top-level structure of classifier-pins.yaml.
-type classifierPinsFile struct {
-	Models []classifierPin `yaml:"models"`
+// judgePinsFile is the top-level structure of judge-pins.yaml.
+type judgePinsFile struct {
+	Models []judgePin `yaml:"models"`
 }
 
 // GoldSetEntry is one hand-labelled (output, expected) pair in a gold-set YAML.
@@ -81,15 +81,15 @@ type goldSetFile struct {
 
 // PreflightResult carries the output of a successful RunPreflight call.
 type PreflightResult struct {
-	// ModelDigest is the digest fetched from /api/tags for the classifier model.
-	// Passed to the manifest builder (WithClassifier) so weight provenance is
+	// ModelDigest is the digest fetched from /api/tags for the judge model.
+	// Passed to the manifest builder (WithJudge) so weight provenance is
 	// recorded in the manifest.
 	ModelDigest string
 }
 
-// RunPreflight performs the three pre-sweep classifier checks:
+// RunPreflight performs the three pre-sweep judge checks:
 //  1. Endpoint liveness + digest fetch (hard-fail if unreachable).
-//  2. Weight-digest verification against classifier-pins.yaml (hard-fail on
+//  2. Weight-digest verification against judge-pins.yaml (hard-fail on
 //     mismatch; warning when no digest is pinned yet).
 //  3. Gold-set calibration — macro-averaged per-class accuracy; hard-fail on
 //     either floor breach (per-class < 90% OR macro < 95%).
@@ -98,26 +98,26 @@ type PreflightResult struct {
 // failures; warnings are printed to stderr and do not fail the preflight.
 func RunPreflight(ctx context.Context, cfg PreflightConfig) (*PreflightResult, error) {
 	// 1. Ping + digest fetch.
-	digest, err := fetchOllamaDigest(ctx, cfg.ClassifierBaseURL, "qwen2.5:3b")
+	digest, err := fetchOllamaDigest(ctx, cfg.JudgeBaseURL, "qwen2.5:3b")
 	if err != nil {
 		return nil, fmt.Errorf(
-			"classifier preflight: endpoint unreachable (%s): %w\n"+
+			"judge preflight: endpoint unreachable (%s): %w\n"+
 				"  → ensure ollama is running:  ollama serve\n"+
 				"  → pull the model:            ollama pull qwen2.5:3b\n"+
-				"  → or skip the classifier:    --no-classifier",
-			cfg.ClassifierBaseURL, err,
+				"  → or skip the judge:    --no-judge",
+			cfg.JudgeBaseURL, err,
 		)
 	}
 
 	// 2. Digest verification.
 	if err := verifyDigest(cfg.PinsFile, "qwen2.5:3b", digest); err != nil {
-		return nil, fmt.Errorf("classifier preflight: %w", err)
+		return nil, fmt.Errorf("judge preflight: %w", err)
 	}
 
 	// 3. Gold-set calibration.
-	if cfg.GoldSetFile != "" && cfg.Classifier != nil && cfg.PromptPath != "" {
+	if cfg.GoldSetFile != "" && cfg.Judge != nil && cfg.PromptPath != "" {
 		if err := runGoldSetCalibration(ctx, cfg); err != nil {
-			return nil, fmt.Errorf("classifier preflight: gold-set: %w", err)
+			return nil, fmt.Errorf("judge preflight: gold-set: %w", err)
 		}
 	}
 
@@ -182,13 +182,13 @@ func verifyDigest(pinsFile, modelName, gotDigest string) error {
 	if err != nil {
 		// Pins file missing on first use — warn but don't block.
 		fmt.Fprintf(os.Stderr,
-			"warn: classifier-pins.yaml not found (%s); digest not verified. Fetched: %s\n"+
+			"warn: judge-pins.yaml not found (%s); digest not verified. Fetched: %s\n"+
 				"  → update %s to pin this digest and prevent silent re-pulls\n",
 			pinsFile, gotDigest, pinsFile)
 		return nil
 	}
 
-	var pins classifierPinsFile
+	var pins judgePinsFile
 	if err := yaml.Unmarshal(data, &pins); err != nil {
 		return fmt.Errorf("parse %s: %w", pinsFile, err)
 	}
@@ -227,7 +227,7 @@ func verifyDigest(pinsFile, modelName, gotDigest string) error {
 }
 
 // runGoldSetCalibration loads the gold-set YAML, verifies class balance, runs
-// each (output, expected) pair through the classifier, and computes macro-
+// each (output, expected) pair through the judge, and computes macro-
 // averaged per-class accuracy. Hard-fails on either floor breach.
 func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 	data, err := os.ReadFile(cfg.GoldSetFile)
@@ -285,7 +285,7 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 		prompt := strings.ReplaceAll(promptTemplate, "{{output}}", e.Output)
 
 		callCtx, cancel := context.WithTimeout(ctx, preflightGoldCallTimeout)
-		resp, callErr := cfg.Classifier.Chat(callCtx, adapter.ChatRequest{
+		resp, callErr := cfg.Judge.Chat(callCtx, adapter.ChatRequest{
 			Model:       "qwen2.5:3b",
 			Messages:    []adapter.Message{{Role: "user", Content: prompt}},
 			Temperature: 0,
@@ -294,7 +294,7 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 		})
 		cancel()
 
-		// F2 fix: classifier call errors are NOT counted as misclassifications.
+		// F2 fix: judge call errors are NOT counted as misclassifications.
 		// A transient outage (timeout, connection refused) must not silently
 		// degrade accuracy and falsely FAIL the gate. Hard-fail immediately with
 		// an actionable message naming which entry failed.
@@ -304,9 +304,9 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 				noteStr = fmt.Sprintf(" (%s)", e.Note)
 			}
 			return fmt.Errorf(
-				"gold-set entry %d/%d (expected=%s%s) classifier call failed: %w\n"+
-					"  → preflight cannot certify classifier health when the classifier itself is unreliable\n"+
-					"  → fix the classifier connection and retry, or use --no-classifier",
+				"gold-set entry %d/%d (expected=%s%s) judge call failed: %w\n"+
+					"  → preflight cannot certify judge health when the judge itself is unreliable\n"+
+					"  → fix the judge connection and retry, or use --no-judge",
 				i+1, total, expected, noteStr, callErr,
 			)
 		}
@@ -351,8 +351,8 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 	if hardFail {
 		return fmt.Errorf(
 			"accuracy below floor (macro=%.1f%%, floor=%.0f%%)\n"+
-				"  → classifier weights may have drifted — check if qwen2.5:3b was re-pulled\n"+
-				"  → use --no-classifier to skip (accuracy issue must be investigated first)",
+				"  → judge weights may have drifted — check if qwen2.5:3b was re-pulled\n"+
+				"  → use --no-judge to skip (accuracy issue must be investigated first)",
 			macro*100, goldSetMacroFloor*100,
 		)
 	}

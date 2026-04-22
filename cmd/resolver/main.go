@@ -61,7 +61,7 @@ type flags struct {
 	dataDir     string
 	out         string
 	role        string
-	noClassifier bool
+	noJudge bool
 }
 
 // selectAdapter returns the Adapter for the given flags. Defaults to
@@ -180,37 +180,37 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		n = 1
 	}
 
-	// Classifier setup: create the ollama adapter and run preflight (ping +
+	// Judge setup: create the ollama adapter and run preflight (ping +
 	// digest check + gold-set calibration) once before the repeat loop.
-	// --no-classifier short-circuits everything: classifierAd stays nil and
-	// every ClassifierMatch arm in verdict.matchOne is skipped silently.
+	// --no-judge short-circuits everything: judgeAd stays nil and
+	// every Judge arm in verdict.matchOne is skipped silently.
 	var (
-		classifierAd           adapter.Adapter
-		classifierDataDir      string
-		classifierWeightDigest string
-		classifierPromptHash   string
+		judgeAd           adapter.Adapter
+		judgeDataDir      string
+		judgeWeightDigest string
+		judgePromptHash   string
 	)
-	if !f.noClassifier {
-		classifierAd = adapter.NewOllamaChat("")
-		cdd, cleanup, err := setupClassifierDataDir(f, dataDir)
+	if !f.noJudge {
+		judgeAd = adapter.NewOllamaChat("")
+		cdd, cleanup, err := setupJudgeDataDir(f, dataDir)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error: classifier data dir:", err)
+			fmt.Fprintln(os.Stderr, "error: judge data dir:", err)
 			return 2
 		}
 		if cleanup != nil {
 			defer cleanup()
 		}
-		classifierDataDir = cdd
+		judgeDataDir = cdd
 
-		pinsPath := filepath.Join(classifierDataDir, "gold-sets", "classifier-pins.yaml")
-		goldPath := filepath.Join(classifierDataDir, "gold-sets", "safety-refusal.yaml")
-		promptPath := filepath.Join(classifierDataDir, "matcher-prompts", "safety-refusal.txt")
+		pinsPath := filepath.Join(judgeDataDir, "gold-sets", "judge-pins.yaml")
+		goldPath := filepath.Join(judgeDataDir, "gold-sets", "safety-refusal.yaml")
+		promptPath := filepath.Join(judgeDataDir, "judge-prompts", "safety-refusal.txt")
 		pf := runner.PreflightConfig{
-			ClassifierBaseURL: "http://localhost:11434",
+			JudgeBaseURL: "http://localhost:11434",
 			PinsFile:          pinsPath,
 			GoldSetFile:       goldPath,
 			PromptPath:        promptPath,
-			Classifier:        classifierAd,
+			Judge:             judgeAd,
 		}
 		pfResult, pfErr := runner.RunPreflight(ctx, pf)
 		if pfErr != nil {
@@ -220,9 +220,9 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 		// Compute prompt hash for manifest provenance (B6).
 		if promptBytes, readErr := os.ReadFile(promptPath); readErr == nil {
 			h := sha256.Sum256(promptBytes)
-			classifierPromptHash = fmt.Sprintf("%x", h[:])
+			judgePromptHash = fmt.Sprintf("%x", h[:])
 		}
-		classifierWeightDigest = pfResult.ModelDigest
+		judgeWeightDigest = pfResult.ModelDigest
 	}
 
 	// Reproducibility-repeat loop: `-n N` runs Tier 1 N times in sequence.
@@ -238,7 +238,7 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 			suffix = fmt.Sprintf("-rep%d", k)
 		}
 		code, rg := runTierOnce(ctx, f, dataDir, tools, sysPrompt, scenarios, suffix, repeatGroup,
-			classifierAd, classifierDataDir, classifierWeightDigest, classifierPromptHash)
+			judgeAd, judgeDataDir, judgeWeightDigest, judgePromptHash)
 		if k == 0 {
 			firstExitCode = code
 			repeatGroup = rg
@@ -247,26 +247,26 @@ func runTier(ctx context.Context, f flags, dataDir dataSource) int {
 	return firstExitCode
 }
 
-// setupClassifierDataDir resolves the filesystem directory from which
-// classifier data files (pins, gold-sets, matcher-prompts) are read.
+// setupJudgeDataDir resolves the filesystem directory from which
+// judge data files (pins, gold-sets, judge-prompts) are read.
 //
 // When --data-dir is set the external directory is used directly.
 // Otherwise, the files are extracted from the embedded FS to a temp dir so
 // that os.ReadFile calls in preflight and verdict can reach them. The returned
 // cleanup func removes the temp dir; it is nil when --data-dir is used.
-func setupClassifierDataDir(f flags, ds dataSource) (string, func(), error) {
+func setupJudgeDataDir(f flags, ds dataSource) (string, func(), error) {
 	if f.dataDir != "" {
 		return f.dataDir, nil, nil
 	}
 
-	// Extract the classifier data files from the embedded FS.
+	// Extract the judge data files from the embedded FS.
 	needed := []string{
-		"gold-sets/classifier-pins.yaml",
+		"gold-sets/judge-pins.yaml",
 		"gold-sets/safety-refusal.yaml",
-		"matcher-prompts/safety-refusal.txt",
+		"judge-prompts/safety-refusal.txt",
 	}
 
-	tmpDir, err := os.MkdirTemp("", "resolver-classifier-*")
+	tmpDir, err := os.MkdirTemp("", "resolver-judge-*")
 	if err != nil {
 		return "", nil, err
 	}
@@ -296,13 +296,13 @@ func setupClassifierDataDir(f flags, ds dataSource) (string, func(), error) {
 // on the scorecard filename (e.g. `-rep2`); `repeatGroup` lands on the
 // manifest runConfig so rows can be joined downstream.
 //
-// classifierAd is the pre-initialised classifier adapter (nil on --no-classifier).
-// classifierDataDir is the resolved data directory for prompt_ref paths.
+// judgeAd is the pre-initialised judge adapter (nil on --no-judge).
+// judgeDataDir is the resolved data directory for prompt_ref paths.
 func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tools []scenario.ToolDef, sysPrompt string, scenarios []scenario.Scenario,
 	suffix, repeatGroup string,
-	classifierAd adapter.Adapter, classifierDataDir string,
-	classifierWeightDigest, classifierPromptHash string) (int, string) {
+	judgeAd adapter.Adapter, judgeDataDir string,
+	judgeWeightDigest, judgePromptHash string) (int, string) {
 
 	ad := selectAdapter(f)
 	commonOpts := runner.ExecuteOpts{
@@ -311,8 +311,8 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 		Model:        f.model,
 		APIKey:       f.apiKey,
 		Timeout:      180 * time.Second,
-		Classifier:   classifierAd,
-		DataDir:      classifierDataDir,
+		Judge:   judgeAd,
+		DataDir:      judgeDataDir,
 	}
 
 	// Replay mode: override scorecard meta so the golden diff is a pure
@@ -333,11 +333,11 @@ func runTierOnce(ctx context.Context, f flags, dataDir dataSource,
 	tok := tokenizer.Default()
 	resolvedRole := resolveScenarioRole(scenarios)
 	mb := manifest.NewBuilder(f.model, f.endpoint, ad.Name(), string(tok.Mode())).WithRole(resolvedRole)
-	if f.noClassifier {
-		mb = mb.WithClassifierDisabled()
-	} else if classifierWeightDigest != "" {
-		mb = mb.WithClassifier("qwen2.5:3b", classifierWeightDigest, "http://localhost:11434",
-			"matcher-prompts/safety-refusal.txt", classifierPromptHash)
+	if f.noJudge {
+		mb = mb.WithJudgeDisabled()
+	} else if judgeWeightDigest != "" {
+		mb = mb.WithJudge("qwen2.5:3b", judgeWeightDigest, "http://localhost:11434",
+			"judge-prompts/safety-refusal.txt", judgePromptHash)
 	}
 
 	// Optional --run-config sidecar: capture proxy + vLLM recipe metadata into
@@ -589,7 +589,7 @@ func parseFlags() flags {
 	flag.StringVar(&f.thresholds, "thresholds", "", "path to a gate-thresholds YAML overriding the embedded defaults")
 	flag.StringVar(&f.dataDir, "data-dir", "", "override embedded data with an external directory")
 	flag.StringVar(&f.out, "out", "", "output directory (default reports/results or reports/sweeps)")
-	flag.BoolVar(&f.noClassifier, "no-classifier", envOr("RESOLVER_NO_CLASSIFIER", "") != "", "disable the classifier matcher (skips preflight and all ClassifierMatch arms)")
+	flag.BoolVar(&f.noJudge, "no-judge", envOr("RESOLVER_NO_JUDGE", "") != "", "disable the LLM-as-judge matcher (skips preflight and all Judge arms)")
 	flag.Parse()
 	return f
 }

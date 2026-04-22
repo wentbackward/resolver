@@ -21,7 +21,7 @@ import (
 // ErrUnsupportedSchema is returned when a pre-v3 manifest is encountered.
 // v2.1 is a forward-only schema: v1/v2 captures live under
 // research/captures-v1/ and are read forensically, never re-ingested.
-// Aggregator accepts manifestVersion 3 (role-organised) and 4 (+ classifier
+// Aggregator accepts manifestVersion 3 (role-organised) and 4 (+ judge
 // metadata); higher versions are ingested best-effort with a warning.
 var ErrUnsupportedSchema = errors.New("unsupported manifest schema (pre-v3); aggregator ingests manifestVersion >= 3")
 
@@ -311,16 +311,16 @@ func ingestRun(db *sql.DB, r discovered) error {
 		manifest_version, started_at, finished_at, go_version, commit_sha, host_name,
 		overall, total_ms, avg_ms, p50_ms, p95_ms, max_ms,
 		query_count, correct_count, partial_count, incorrect_count, error_count,
-		classifier_model, classifier_weight_digest, classifier_endpoint,
-		classifier_prompt_ref, classifier_prompt_hash, classifier_disabled
+		judge_model, judge_weight_digest, judge_endpoint,
+		judge_prompt_ref, judge_prompt_hash, judge_disabled
 	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.runID, r.scorecardPath, r.manifestPath,
 		m.Tier, m.Sweep, m.Model, m.ResolvedRealModel, m.Endpoint, m.Adapter, m.TokenizerMode,
 		m.ManifestVersion, parseTS(m.StartedAt), parseTS(m.FinishedAt), m.GoVersion, m.CommitSHA, m.HostName,
 		overallVal, sc.Summary.Timing.TotalMs, sc.Summary.Timing.AvgMs, sc.Summary.Timing.P50Ms, sc.Summary.Timing.P95Ms, sc.Summary.Timing.MaxMs,
 		sc.Meta.QueryCount, correct, partial, incorrect, errs,
-		nullableS(m.ClassifierModel), nullableS(m.ClassifierWeightDigest), nullableS(m.ClassifierEndpoint),
-		nullableS(m.ClassifierPromptRef), nullableS(m.ClassifierPromptHash), m.ClassifierDisabled,
+		nullableS(m.JudgeModel), nullableS(m.JudgeWeightDigest), nullableS(m.JudgeEndpoint),
+		nullableS(m.JudgePromptRef), nullableS(m.JudgePromptHash), m.JudgeDisabled,
 	)
 	if err != nil {
 		return fmt.Errorf("insert runs: %w", err)
@@ -426,17 +426,17 @@ func reloadCommunity(db *sql.DB, rows []CommunityBenchmark) error {
 	return tx.Commit()
 }
 
-// schemaV3Migrations adds classifier columns to existing DuckDB databases that
-// were created with schemaVersion <= 2 (before the classifier-matcher
+// schemaV3Migrations adds judge columns to existing DuckDB databases that
+// were created with schemaVersion <= 2 (before the judge-matcher
 // foundation). DuckDB supports "ALTER TABLE tbl ADD COLUMN IF NOT EXISTS col
 // type" so these are idempotent on already-migrated databases.
 var schemaV3Migrations = []string{
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_model         VARCHAR`,
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_weight_digest VARCHAR`,
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_endpoint      VARCHAR`,
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_prompt_ref    VARCHAR`,
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_prompt_hash   VARCHAR`,
-	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS classifier_disabled      BOOLEAN`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_model         VARCHAR`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_weight_digest VARCHAR`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_endpoint      VARCHAR`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_prompt_ref    VARCHAR`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_prompt_hash   VARCHAR`,
+	`ALTER TABLE runs ADD COLUMN IF NOT EXISTS judge_disabled      BOOLEAN`,
 }
 
 func migrate(db *sql.DB) error {

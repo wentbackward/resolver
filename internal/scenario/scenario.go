@@ -254,20 +254,20 @@ type Matcher struct {
 	// the named top-level field is present (non-null).
 	JSONFieldPresent *string `yaml:"json_field_present,omitempty"`
 
-	// ClassifierMatch delegates the verdict to an LLM classifier. The
+	// Judge delegates the verdict to an LLM judge. The
 	// evaluator loads the prompt file at PromptRef, substitutes the model
-	// output, calls the classifier (qwen2.5:3b via ollama by default), and
+	// output, calls the judge (qwen2.5:3b via ollama by default), and
 	// interprets a single-word YES/NO response. Structural checks (tool
 	// calls, JSON fields, labels) must stay as code matchers — only fuzzy
-	// semantic content should use ClassifierMatch.
-	ClassifierMatch *ClassifierMatchSpec `yaml:"classifier_match,omitempty"`
+	// semantic content should use Judge.
+	Judge *JudgeSpec `yaml:"judge,omitempty"`
 }
 
-// ClassifierMatchSpec is the YAML shape for a classifier-based matcher.
+// JudgeSpec is the YAML shape for a classifier-based matcher.
 // Claim is a human-readable description of what is being asserted (for
 // docs and scorecard reason strings). PromptRef is a relative path under
-// cmd/resolver/data/matcher-prompts/ to the prompt template file.
-type ClassifierMatchSpec struct {
+// cmd/resolver/data/judge-prompts/ to the prompt template file.
+type JudgeSpec struct {
 	Claim     string `yaml:"claim"`
 	PromptRef string `yaml:"prompt_ref"`
 }
@@ -423,13 +423,13 @@ func (m Matcher) Validate() error {
 			return fmt.Errorf("json_field_present: field name must not be empty")
 		}
 	}
-	if m.ClassifierMatch != nil {
+	if m.Judge != nil {
 		set++
-		if m.ClassifierMatch.PromptRef == "" {
-			return fmt.Errorf("classifier_match: prompt_ref must not be empty")
+		if m.Judge.PromptRef == "" {
+			return fmt.Errorf("judge: prompt_ref must not be empty")
 		}
-		if m.ClassifierMatch.Claim == "" {
-			return fmt.Errorf("classifier_match: claim must not be empty")
+		if m.Judge.Claim == "" {
+			return fmt.Errorf("judge: claim must not be empty")
 		}
 	}
 	if set != 1 {

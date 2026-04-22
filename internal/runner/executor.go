@@ -22,13 +22,13 @@ type ExecuteOpts struct {
 	// the --replay CLI flag.
 	Replayer Replayer
 
-	// Classifier, if non-nil, is forwarded to verdict.Evaluate so that
-	// ClassifierMatch matchers can call the local LLM. Nil means the
-	// --no-classifier path: every ClassifierMatch arm is silently skipped.
-	Classifier adapter.Adapter
+	// Judge, if non-nil, is forwarded to verdict.Evaluate so that
+	// Judge matchers can call the local LLM. Nil means the
+	// --no-judge path: every Judge arm is silently skipped.
+	Judge adapter.Adapter
 
 	// DataDir is the base directory for resolving prompt_ref paths embedded
-	// in ClassifierMatch matchers (e.g. cmd/resolver/data/). Defaults to "."
+	// in Judge matchers (e.g. cmd/resolver/data/). Defaults to "."
 	// when empty.
 	DataDir string
 }
@@ -39,29 +39,29 @@ type Replayer interface {
 	Lookup(scenarioID string) (adapter.ChatResponse, bool)
 }
 
-// ClassifierInputSnapshot pins the exact inputs to a classifier call so that
+// JudgeInputSnapshot pins the exact inputs to a judge call so that
 // post-hoc replay is bit-reproducible (OD-1 residual, B5). All four fields
-// are required when a ClassifierMatch fires; the struct is absent (nil)
-// when no classifier was involved in the verdict.
-type ClassifierInputSnapshot struct {
-	// ContentHash is sha256 of the MUT's content fed to the classifier.
+// are required when a Judge fires; the struct is absent (nil)
+// when no judge was involved in the verdict.
+type JudgeInputSnapshot struct {
+	// ContentHash is sha256 of the MUT's content fed to the judge.
 	ContentHash string `json:"contentHash"`
 	// PromptRef is the relative path to the matcher prompt file used.
 	PromptRef string `json:"promptRef"`
 	// PromptHash is sha256 of the prompt file contents at call time.
 	PromptHash string `json:"promptHash"`
-	// ClassifierParamsHash is sha256 of the canonical JSON of
+	// JudgeParamsHash is sha256 of the canonical JSON of
 	// {max_tokens, seed, temperature, top_p} as actually passed.
-	ClassifierParamsHash string `json:"classifierParamsHash"`
+	JudgeParamsHash string `json:"judgeParamsHash"`
 }
 
 // PerQuery is one scored query in the scorecard output. v2.1 adds Role
 // alongside Tier — scenarios migrated to role-organised dirs carry Role;
 // legacy unmigrated scenarios (none remain in v2.1 data/) carry Tier.
 //
-// B5 adds ClassifierScore/Reason/ElapsedMs/PromptRef twin-fields and the
-// ClassifierInput snapshot. All classifier fields are omitempty so non-
-// classifier runs produce identical scorecard JSON to pre-B5 outputs.
+// B5 adds JudgeScore/Reason/ElapsedMs/PromptRef twin-fields and the
+// JudgeInput snapshot. All judge fields are omitempty so non-
+// judge runs produce identical scorecard JSON to pre-B5 outputs.
 type PerQuery struct {
 	Tier         scenario.Tier      `json:"tier,omitempty"`
 	Role         scenario.Role      `json:"role,omitempty"`
@@ -74,12 +74,12 @@ type PerQuery struct {
 	ToolCalls    []adapter.ToolCall `json:"toolCalls"`
 	Content      any                `json:"content"`
 
-	// Classifier twin-fields (omitempty; absent when no ClassifierMatch fired).
-	ClassifierScore     verdict.Score            `json:"classifierScore,omitempty"`
-	ClassifierReason    string                   `json:"classifierReason,omitempty"`
-	ClassifierElapsedMs int64                    `json:"classifierElapsedMs,omitempty"`
-	ClassifierPromptRef string                   `json:"classifierPromptRef,omitempty"`
-	ClassifierInput     *ClassifierInputSnapshot `json:"classifierInput,omitempty"`
+	// Judge twin-fields (omitempty; absent when no Judge fired).
+	JudgeScore     verdict.Score            `json:"judgeScore,omitempty"`
+	JudgeReason    string                   `json:"judgeReason,omitempty"`
+	JudgeElapsedMs int64                    `json:"judgeElapsedMs,omitempty"`
+	JudgePromptRef string                   `json:"judgePromptRef,omitempty"`
+	JudgeInput     *JudgeInputSnapshot `json:"judgeInput,omitempty"`
 }
 
 // RunTier1 executes all Tier 1 scenarios serially per spec §2/§9.
@@ -146,7 +146,7 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 			calls = ParseFallbackToolCalls(resp.Content)
 		}
 		v := verdict.Evaluate(&s, calls, resp.Content, verdict.EvaluateOpts{
-			Classifier: opts.Classifier,
+			Judge: opts.Judge,
 			Ctx:        ctx,
 			DataDir:    opts.DataDir,
 		})
@@ -154,18 +154,18 @@ func RunTier1(ctx context.Context, ad adapter.Adapter, scenarios []scenario.Scen
 		pq.Reason = v.Reason
 		pq.ToolCalls = emptyIfNil(calls)
 		pq.Content = jsonNullOr(resp.Content)
-		// Populate classifier twin-fields when a ClassifierMatch fired.
-		if v.Classifier != nil {
-			cm := v.Classifier
-			pq.ClassifierScore = cm.Score
-			pq.ClassifierReason = cm.Reason
-			pq.ClassifierElapsedMs = cm.ElapsedMs
-			pq.ClassifierPromptRef = cm.PromptRef
-			pq.ClassifierInput = &ClassifierInputSnapshot{
+		// Populate judge twin-fields when a Judge fired.
+		if v.Judge != nil {
+			cm := v.Judge
+			pq.JudgeScore = cm.Score
+			pq.JudgeReason = cm.Reason
+			pq.JudgeElapsedMs = cm.ElapsedMs
+			pq.JudgePromptRef = cm.PromptRef
+			pq.JudgeInput = &JudgeInputSnapshot{
 				ContentHash:          cm.ContentHash,
 				PromptRef:            cm.PromptRef,
 				PromptHash:           cm.PromptHash,
-				ClassifierParamsHash: cm.ClassifierParamsHash,
+				JudgeParamsHash: cm.JudgeParamsHash,
 			}
 		}
 		out = append(out, pq)

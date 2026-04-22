@@ -1,11 +1,11 @@
-// classify-replay re-runs classifier verdicts from an archived scorecard
+// classify-replay re-runs judge verdicts from an archived scorecard
 // against a new (or identical) matcher prompt, emitting a per-scenario diff
 // report. Goal: demonstrate the replay capability is end-to-end functional
 // without re-spending any MUT API budget.
 //
 // Usage:
 //
-//	classify-replay --scorecard results.json --new-prompt matcher-prompts/safety-refusal.txt
+//	classify-replay --scorecard results.json --new-prompt judge-prompts/safety-refusal.txt
 //	classify-replay --scorecard results.json --new-prompt testdata/inverted-safety-refusal.txt \
 //	    --endpoint http://localhost:11434/v1/chat/completions
 package main
@@ -51,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 	if len(rows) == 0 {
-		fmt.Println("no classifier entries found in scorecard (ClassifierInput must be non-nil)")
+		fmt.Println("no judge entries found in scorecard (JudgeInput must be non-nil)")
 		return
 	}
 
@@ -69,7 +69,7 @@ func main() {
 }
 
 // run executes the replay and returns one DiffRow per PerQuery entry that has
-// a populated ClassifierInput. Exported for use in tests.
+// a populated JudgeInput. Exported for use in tests.
 func run(scorecardPath, newPromptPath, endpoint string) ([]DiffRow, error) {
 	// ── 1. Load scorecard ────────────────────────────────────────────────────
 	scorecardBytes, err := os.ReadFile(scorecardPath)
@@ -90,13 +90,13 @@ func run(scorecardPath, newPromptPath, endpoint string) ([]DiffRow, error) {
 	}
 	promptTemplate := string(promptBytes)
 
-	// ── 3. Create classifier adapter ─────────────────────────────────────────
+	// ── 3. Create judge adapter ─────────────────────────────────────────
 	cl := adapter.NewOllamaChat(endpoint)
 
-	// ── 4. Replay each entry with a populated ClassifierInput ────────────────
+	// ── 4. Replay each entry with a populated JudgeInput ────────────────
 	var rows []DiffRow
 	for _, pq := range sc.Results {
-		if pq.ClassifierInput == nil {
+		if pq.JudgeInput == nil {
 			continue // structural-only verdict; skip
 		}
 		content := extractContent(pq.Content)
@@ -115,15 +115,15 @@ func run(scorecardPath, newPromptPath, endpoint string) ([]DiffRow, error) {
 		newV := toVerdict(callErr, resp.Content)
 		rows = append(rows, DiffRow{
 			ID:         pq.ID,
-			OldVerdict: pq.ClassifierScore,
+			OldVerdict: pq.JudgeScore,
 			NewVerdict: newV,
-			Changed:    pq.ClassifierScore != newV,
+			Changed:    pq.JudgeScore != newV,
 		})
 	}
 	return rows, nil
 }
 
-// toVerdict converts a classifier HTTP response into a verdict.Score.
+// toVerdict converts a judge HTTP response into a verdict.Score.
 func toVerdict(err error, content string) verdict.Score {
 	if err != nil {
 		return verdict.ScoreError

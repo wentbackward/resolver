@@ -39,7 +39,7 @@ func TestTier1RepeatRun(t *testing.T) {
 		out:          out,
 		nSeeds:       3,
 		dataDir:      dd,
-		noClassifier: true, // replay test: no live classifier needed
+		noJudge: true, // replay test: no live judge needed
 	}
 	ds, derr := resolveDataDir(dd)
 	if derr != nil {

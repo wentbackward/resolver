@@ -192,10 +192,10 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 				samples = append(samples, q.ElapsedMs)
 				allSamples = append(allSamples, q.ElapsedMs)
 			}
-			// Classifier twin-field tallies.
-			if q.ClassifierScore != "" {
+			// Judge twin-field tallies.
+			if q.JudgeScore != "" {
 				classifierCalls++
-				switch q.ClassifierScore {
+				switch q.JudgeScore {
 				case verdict.ScoreCorrect:
 					classifierCorrect++
 				case verdict.ScoreError:
@@ -209,7 +209,7 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 		rsum.P50Ms = tt.P50Ms
 
 		// Common counters — emitted for every role (v2.1.1 Fix 3).
-		// Before v2.1.1 only classifier and reducer-* roles populated
+		// Before v2.1.1 only judge and reducer-* roles populated
 		// `metrics_json`; the 10 agentic roles shipped empty `{}`, which
 		// broke downstream analyzer notebooks that expected `pct` on
 		// every row. Uniform base shape keeps role_scorecards.metrics_json
@@ -223,18 +223,18 @@ func Build(meta Meta, results []runner.PerQuery) Scorecard {
 		rsum.Metrics["error"] = float64(rsum.Errors)
 		rsum.Metrics["total"] = float64(rsum.Total)
 
-		// Classifier twin-field counters. Only emitted when at least one
-		// ClassifierMatch fired in this role so the JSON shape stays stable
-		// for non-classifier runs.
+		// Judge twin-field counters. Only emitted when at least one
+		// Judge fired in this role so the JSON shape stays stable
+		// for non-judge runs.
 		if classifierCalls > 0 {
 			var classifierPct float64
 			if classifierCalls > 0 {
 				classifierPct = math.Round(float64(classifierCorrect)/float64(classifierCalls)*100)
 			}
-			rsum.Metrics["classifier_pct"] = classifierPct
-			rsum.Metrics["classifier_correct"] = float64(classifierCorrect)
-			rsum.Metrics["classifier_calls"] = float64(classifierCalls)
-			rsum.Metrics["classifier_errors"] = float64(classifierErrors)
+			rsum.Metrics["judge_pct"] = classifierPct
+			rsum.Metrics["judge_correct"] = float64(classifierCorrect)
+			rsum.Metrics["judge_calls"] = float64(classifierCalls)
+			rsum.Metrics["judge_errors"] = float64(classifierErrors)
 		}
 
 		// Role-specific derived metrics (layered on top of the common
