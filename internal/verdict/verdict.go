@@ -58,9 +58,10 @@ type EvaluateOpts struct {
 // assistant content. Correct wins over partial wins over incorrect.
 //
 // When a classifier is injected via EvaluateOpts, ClassifierMatch matchers run
-// as an independent sidecar pass after the primary structural verdict — so the
-// classifier always fires even when a structural matcher already matched.
-// Result.Classifier carries the sidecar verdict for twin-field population (B5).
+// inline during the primary verdict pass. The ClassifierMeta from the first
+// ClassifierMatch encountered is threaded through to Result.Classifier without
+// a second call — avoiding the double-fire bug where a sidecar re-invoked the
+// same classifier matcher that already ran during the primary pass (F1 fix).
 //
 // The variadic form preserves backward compatibility — existing callers with
 // no opts continue to compile and behave identically.
@@ -80,7 +81,9 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 
 	// Primary verdict: all matcher kinds run normally (ClassifierMatch uses cc
 	// when available; is silently skipped when cc is nil / --no-classifier).
-	ok, errRes := matchAny(s.Rule.CorrectIf, calls, content, cc)
+	// matchAny now threads out *ClassifierMeta so we can attach it to the
+	// result without a redundant second classifier call (F1 fix).
+	ok, clMeta, errRes := matchAny(s.Rule.CorrectIf, calls, content, cc)
 	if errRes != nil {
 		return *errRes
 	}
@@ -88,9 +91,13 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 	if ok {
 		primary = Result{Score: ScoreCorrect, Reason: firstNonEmpty(s.Rule.ReasonCorrect, "matched correct_if rule")}
 	} else {
-		ok, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
+		var clMeta2 *ClassifierMeta
+		ok, clMeta2, errRes = matchAny(s.Rule.PartialIf, calls, content, cc)
 		if errRes != nil {
 			return *errRes
+		}
+		if clMeta == nil {
+			clMeta = clMeta2 // use partial_if meta when correct_if had none
 		}
 		if ok {
 			primary = Result{Score: ScorePartial, Reason: firstNonEmpty(s.Rule.ReasonPartial, "matched partial_if rule")}
@@ -99,18 +106,25 @@ func Evaluate(s *scenario.Scenario, calls []adapter.ToolCall, content string, op
 		}
 	}
 
-	// Classifier sidecar: run ClassifierMatch matchers as an independent A/B
-	// pass so the classifier verdict is always captured regardless of whether
-	// a structural matcher matched first (B5 twin-field requirement). The
-	// sidecar does not influence the primary score — it attaches metadata only.
+	// Attach classifier meta. When the primary pass already evaluated a
+	// ClassifierMatch (clMeta != nil), reuse that result — no second call.
+	// Only fall back to the sidecar when no ClassifierMatch appeared in the
+	// primary matchers at all (e.g. classifier_match lives only in partial_if
+	// of a scenario that matched correct_if via a structural rule).
 	if cc != nil {
-		primary.Classifier = runClassifierSidecar(s, content, cc)
+		if clMeta != nil {
+			primary.Classifier = clMeta
+		} else {
+			primary.Classifier = runClassifierSidecar(s, content, cc)
+		}
 	}
 	return primary
 }
 
 // runClassifierSidecar finds the first ClassifierMatch matcher across
 // correct_if and partial_if, runs it, and returns the ClassifierMeta.
+// Called only when the primary matchAny pass did not encounter any
+// ClassifierMatch (clMeta == nil), preventing double-fire (F1).
 // Returns nil when no ClassifierMatch matcher is present.
 func runClassifierSidecar(s *scenario.Scenario, content string, cc *classifierCtx) *ClassifierMeta {
 	all := append(s.Rule.CorrectIf, s.Rule.PartialIf...)
@@ -125,69 +139,74 @@ func runClassifierSidecar(s *scenario.Scenario, content string, cc *classifierCt
 	return nil
 }
 
-// matchAny returns (true, nil) if at least one Matcher evaluates to true,
-// (false, &Result{ScoreError, ...}) if a ClassifierMatch returns an error,
-// or (false, nil) if no matcher matches.
-func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *Result) {
+// matchAny returns (true, meta, nil) if at least one Matcher evaluates to
+// true, (false, meta, &Result{ScoreError, ...}) if a ClassifierMatch returns
+// an error, or (false, nil, nil) if no matcher matches. The *ClassifierMeta
+// is non-nil whenever a ClassifierMatch fired (regardless of YES/NO/error)
+// so callers can reuse it without a second classifier call (F1 fix).
+func matchAny(ms []scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *ClassifierMeta, *Result) {
 	for _, m := range ms {
-		ok, errRes := matchOne(m, calls, content, cc)
+		ok, meta, errRes := matchOne(m, calls, content, cc)
 		if errRes != nil {
-			return false, errRes
+			return false, meta, errRes
 		}
 		if ok {
-			return true, nil
+			return true, meta, nil
 		}
 	}
-	return false, nil
+	return false, nil, nil
 }
 
-// matchOne evaluates a single Matcher. Returns (matched, nil) for structural
-// matchers; (false, &Result{ScoreError}) when a ClassifierMatch call fails or
-// returns a non-YES/NO answer; (false, nil) when ClassifierMatch is skipped
-// because no classifier is injected.
-func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *Result) {
+// matchOne evaluates a single Matcher. Returns (matched, meta, nil) for all
+// matchers; meta is non-nil only when a ClassifierMatch fired. Returns
+// (false, meta, &Result{ScoreError}) when a ClassifierMatch call fails or
+// returns a non-YES/NO answer; (false, nil, nil) when ClassifierMatch is
+// skipped because no classifier is injected.
+func matchOne(m scenario.Matcher, calls []adapter.ToolCall, content string, cc *classifierCtx) (bool, *ClassifierMeta, *Result) {
 	switch {
 	case m.ToolCallRequired != nil:
-		return hasToolCallMatch(calls, *m.ToolCallRequired), nil
+		return hasToolCallMatch(calls, *m.ToolCallRequired), nil, nil
 	case m.ToolCallForbidden != nil:
-		return !hasToolCallMatch(calls, *m.ToolCallForbidden), nil
+		return !hasToolCallMatch(calls, *m.ToolCallForbidden), nil, nil
 	case m.ToolCallOrder != nil:
-		return isSubsequence(calls, m.ToolCallOrder.Names), nil
+		return isSubsequence(calls, m.ToolCallOrder.Names), nil, nil
 	case m.ToolCallCountAtLeast != nil:
-		return countMatches(calls, m.ToolCallCountAtLeast.Name, m.ToolCallCountAtLeast.ArgsRegex) >= m.ToolCallCountAtLeast.Min, nil
+		return countMatches(calls, m.ToolCallCountAtLeast.Name, m.ToolCallCountAtLeast.ArgsRegex) >= m.ToolCallCountAtLeast.Min, nil, nil
 	case m.ToolCallCountInRange != nil:
 		c := countMatches(calls, m.ToolCallCountInRange.Name, m.ToolCallCountInRange.ArgsRegex)
-		return c >= m.ToolCallCountInRange.Min && c <= m.ToolCallCountInRange.Max, nil
+		return c >= m.ToolCallCountInRange.Min && c <= m.ToolCallCountInRange.Max, nil, nil
 	case m.RegexMatch != nil:
-		return regexMatchesTarget(*m.RegexMatch, calls, content), nil
+		return regexMatchesTarget(*m.RegexMatch, calls, content), nil, nil
 	case m.AnyToolCall != nil:
-		return hasToolCallMatch(calls, *m.AnyToolCall), nil
+		return hasToolCallMatch(calls, *m.AnyToolCall), nil, nil
 	case m.LabelIs != nil:
-		return labelMatches(content, *m.LabelIs), nil
+		return labelMatches(content, *m.LabelIs), nil, nil
 	case m.ParseValidJSON != nil:
 		if !*m.ParseValidJSON {
-			return false, nil
+			return false, nil, nil
 		}
-		return json.Valid([]byte(stripThinkAndTrim(content))), nil
+		return json.Valid([]byte(stripThinkAndTrim(content))), nil, nil
 	case m.JSONFieldPresent != nil:
-		return jsonFieldPresent(content, *m.JSONFieldPresent), nil
+		return jsonFieldPresent(content, *m.JSONFieldPresent), nil, nil
 	case m.ClassifierMatch != nil:
 		if cc == nil {
 			// No classifier injected (--no-classifier path); skip silently.
-			return false, nil
+			return false, nil, nil
 		}
 		cr := callClassifier(cc, cc.promptPath(m.ClassifierMatch.PromptRef), content)
 		r := interpretClassifier(cr, m.ClassifierMatch)
+		// Always return the meta so callers can reuse it (F1 fix: prevents
+		// double-fire when classifier_match is first in correct_if).
 		switch r.Score {
 		case ScoreCorrect:
-			return true, nil
+			return true, r.Classifier, nil
 		case ScoreIncorrect:
-			return false, nil
+			return false, r.Classifier, nil
 		default: // ScoreError
-			return false, &r
+			return false, r.Classifier, &r
 		}
 	}
-	return false, nil
+	return false, nil, nil
 }
 
 // thinkTagRe matches reasoning-model `<think>...</think>` preambles. Must be
