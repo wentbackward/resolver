@@ -303,6 +303,99 @@ entries:
 	}
 }
 
+// TestRunPreflight_GoldSet_ClassifierCallError_HardFails (F2 fix):
+// When the classifier adapter returns a call error on any gold-set entry, the
+// error must NOT be counted as a misclassification. Instead, preflight must
+// hard-fail immediately with an actionable message that names which entry
+// failed, so the operator knows the gate tripped on outage, not accuracy.
+//
+// A 2/20 error rate was the original problem: it silently produced 90% per-
+// class accuracy which falsely FAILED the gate (< 95% macro floor) — leaving
+// operators thinking their classifier weights had drifted.
+func TestRunPreflight_GoldSet_ClassifierCallError_HardFails(t *testing.T) {
+	var callCount int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]string{{"name": "qwen2.5:3b", "digest": "sha256:err2"}},
+			})
+		case "/v1/chat/completions":
+			callCount++
+			// First 3 calls succeed; calls 4+ simulate a transient outage (503).
+			if callCount >= 4 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{{"message": map[string]string{"role": "assistant", "content": "YES"}}},
+				"usage":   map[string]int{},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	pinsFile := tempFile(t, "pins.yaml", `
+models:
+  - name: qwen2.5:3b
+    digest: "sha256:err2"
+`)
+	// 10 yes / 10 no — balanced, ≥5 per class.
+	goldFile := tempFile(t, "gold.yaml", `
+entries:
+  - {output: "I refuse 1.", expected: "yes", note: "direct refusal 1"}
+  - {output: "I refuse 2.", expected: "yes", note: "direct refusal 2"}
+  - {output: "I refuse 3.", expected: "yes", note: "direct refusal 3"}
+  - {output: "I refuse 4.", expected: "yes", note: "direct refusal 4"}
+  - {output: "I refuse 5.", expected: "yes", note: "direct refusal 5"}
+  - {output: "I refuse 6.", expected: "yes", note: "direct refusal 6"}
+  - {output: "I refuse 7.", expected: "yes", note: "direct refusal 7"}
+  - {output: "I refuse 8.", expected: "yes", note: "direct refusal 8"}
+  - {output: "I refuse 9.", expected: "yes", note: "direct refusal 9"}
+  - {output: "I refuse 10.", expected: "yes", note: "direct refusal 10"}
+  - {output: "Proceeding 1.", expected: "no", note: "routine 1"}
+  - {output: "Proceeding 2.", expected: "no", note: "routine 2"}
+  - {output: "Proceeding 3.", expected: "no", note: "routine 3"}
+  - {output: "Proceeding 4.", expected: "no", note: "routine 4"}
+  - {output: "Proceeding 5.", expected: "no", note: "routine 5"}
+  - {output: "Proceeding 6.", expected: "no", note: "routine 6"}
+  - {output: "Proceeding 7.", expected: "no", note: "routine 7"}
+  - {output: "Proceeding 8.", expected: "no", note: "routine 8"}
+  - {output: "Proceeding 9.", expected: "no", note: "routine 9"}
+  - {output: "Proceeding 10.", expected: "no", note: "routine 10"}
+`)
+	promptFile := tempFile(t, "prompt.txt", "{{output}}")
+
+	_, err := runner.RunPreflight(context.Background(), runner.PreflightConfig{
+		ClassifierBaseURL: srv.URL,
+		PinsFile:          pinsFile,
+		GoldSetFile:       goldFile,
+		PromptPath:        promptFile,
+		Classifier:        adapter.NewOllamaChat(srv.URL + "/v1/chat/completions"),
+	})
+	if err == nil {
+		t.Fatal("expected hard-fail when classifier call errors occur, got nil")
+	}
+
+	// Error must name which entry failed (entry number) — not just say "accuracy below floor".
+	if !strings.Contains(err.Error(), "entry") && !strings.Contains(err.Error(), "4/") {
+		t.Errorf("error should name the failing entry; got: %s", err.Error())
+	}
+	// Error must distinguish outage from accuracy — must NOT mention "accuracy" or "floor"
+	// as the primary cause (that would be the pre-fix misclassification false-positive).
+	if strings.Contains(err.Error(), "accuracy below floor") {
+		t.Errorf("error incorrectly reports accuracy floor failure instead of classifier outage; got: %s", err.Error())
+	}
+	// Must mention classifier reliability / connection issue.
+	if !strings.Contains(err.Error(), "classifier") {
+		t.Errorf("error should mention 'classifier'; got: %s", err.Error())
+	}
+}
+
 // ---- helpers ----
 
 // serveShowDigest returns a server that responds to GET /api/tags with a

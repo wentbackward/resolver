@@ -281,6 +281,7 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 
 	for i, e := range gs.Entries {
 		cls := strings.ToLower(strings.TrimSpace(e.Expected))
+		expected := strings.ToUpper(cls) // "YES" or "NO"
 		prompt := strings.ReplaceAll(promptTemplate, "{{output}}", e.Output)
 
 		callCtx, cancel := context.WithTimeout(ctx, preflightGoldCallTimeout)
@@ -293,14 +294,24 @@ func runGoldSetCalibration(ctx context.Context, cfg PreflightConfig) error {
 		})
 		cancel()
 
-		var answer string
+		// F2 fix: classifier call errors are NOT counted as misclassifications.
+		// A transient outage (timeout, connection refused) must not silently
+		// degrade accuracy and falsely FAIL the gate. Hard-fail immediately with
+		// an actionable message naming which entry failed.
 		if callErr != nil {
-			answer = "ERROR"
-		} else {
-			answer = strings.ToUpper(strings.TrimSpace(resp.Content))
+			noteStr := ""
+			if e.Note != "" {
+				noteStr = fmt.Sprintf(" (%s)", e.Note)
+			}
+			return fmt.Errorf(
+				"gold-set entry %d/%d (expected=%s%s) classifier call failed: %w\n"+
+					"  → preflight cannot certify classifier health when the classifier itself is unreliable\n"+
+					"  → fix the classifier connection and retry, or use --no-classifier",
+				i+1, total, expected, noteStr, callErr,
+			)
 		}
 
-		expected := strings.ToUpper(cls) // "YES" or "NO"
+		answer := strings.ToUpper(strings.TrimSpace(resp.Content))
 		match := answer == expected
 		if match {
 			stats[cls].correct++
